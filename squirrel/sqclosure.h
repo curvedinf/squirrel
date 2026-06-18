@@ -147,7 +147,7 @@ public:
 struct SQNativeClosure : public CHAINABLE_OBJ
 {
 private:
-    SQNativeClosure(SQSharedState *ss,SQFUNCTION func){_function=func;INIT_CHAIN();ADD_TO_CHAIN(&_ss(this)->_gc_chain,this); _env = NULL;}
+    SQNativeClosure(SQSharedState *ss,SQFUNCTION func){_function=func;INIT_CHAIN();ADD_TO_CHAIN(&_ss(this)->_gc_chain,this); _env = NULL; _intrinsic = SQ_NCI_NONE;}
 public:
     static SQNativeClosure *Create(SQSharedState *ss,SQFUNCTION func,SQInteger nouters)
     {
@@ -168,6 +168,7 @@ public:
         _COPY_VECTOR(ret->_outervalues,_outervalues,_noutervalues);
         ret->_typecheck.copy(_typecheck);
         ret->_nparamscheck = _nparamscheck;
+        ret->_intrinsic = _intrinsic;
         return ret;
     }
     ~SQNativeClosure()
@@ -194,6 +195,7 @@ public:
     SQWeakRef *_env;
     SQFUNCTION _function;
     SQObjectPtr _name;
+    SQUnsignedInteger _intrinsic;
 };
 
 

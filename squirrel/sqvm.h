@@ -65,6 +65,7 @@ public:
     //call a generic closure pure SQUIRREL or NATIVE
     bool Call(SQObjectPtr &closure, SQInteger nparams, SQInteger stackbase, SQObjectPtr &outres,SQBool raiseerror);
     SQRESULT Suspend();
+    SQInteger TryFastCallNative(SQNativeClosure *nclosure, SQInteger nargs, SQInteger newbase, SQObjectPtr &retval, bool &suspend, bool &tailcall);
 
     void CallDebugHook(SQInteger type,SQInteger forcedline=0);
     void CallErrorHandler(SQObjectPtr &e);

@@ -13,7 +13,6 @@ SQTable::SQTable(SQSharedState *ss,SQInteger nInitialSize)
     while(nInitialSize>pow2size)pow2size=pow2size<<1;
     AllocNodes(pow2size);
     _usednodes = 0;
-    _delegate = NULL;
     INIT_CHAIN();
     ADD_TO_CHAIN(&_sharedstate->_gc_chain,this);
 }
@@ -116,6 +115,7 @@ bool SQTable::Get(const SQObjectPtr &key,SQObjectPtr &val)
     }
     return false;
 }
+
 bool SQTable::NewSlot(const SQObjectPtr &key,const SQObjectPtr &val)
 {
     assert(sq_type(key) != OT_NULL);
@@ -190,7 +190,6 @@ SQInteger SQTable::Next(bool getweakrefs,const SQObjectPtr &refpos, SQObjectPtr 
     //nothing to iterate anymore
     return -1;
 }
-
 
 bool SQTable::Set(const SQObjectPtr &key, const SQObjectPtr &val)
 {

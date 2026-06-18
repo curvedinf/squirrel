@@ -184,11 +184,29 @@ typedef SQInteger (*SQREADFUNC)(SQUserPointer,SQUserPointer,SQInteger);
 
 typedef SQInteger (*SQLEXREADFUNC)(SQUserPointer);
 
+typedef enum tagSQNativeClosureIntrinsic{
+    SQ_NCI_NONE = 0,
+    SQ_NCI_DEFAULT_LEN,
+    SQ_NCI_DEFAULT_TOFLOAT,
+    SQ_NCI_DEFAULT_TOINTEGER,
+    SQ_NCI_DEFAULT_TOSTRING,
+    SQ_NCI_STRING_SLICE
+}SQNativeClosureIntrinsic;
+
 typedef struct tagSQRegFunction{
+#ifdef __cplusplus
+    tagSQRegFunction()
+        : name(0), f(0), nparamscheck(0), typemask(0), intrinsic(SQ_NCI_NONE) {}
+    tagSQRegFunction(const SQChar *pname, SQFUNCTION pf, SQInteger pnparamscheck, const SQChar *ptypemask)
+        : name(pname), f(pf), nparamscheck(pnparamscheck), typemask(ptypemask), intrinsic(SQ_NCI_NONE) {}
+    tagSQRegFunction(const SQChar *pname, SQFUNCTION pf, SQInteger pnparamscheck, const SQChar *ptypemask, SQUnsignedInteger pintrinsic)
+        : name(pname), f(pf), nparamscheck(pnparamscheck), typemask(ptypemask), intrinsic(pintrinsic) {}
+#endif
     const SQChar *name;
     SQFUNCTION f;
     SQInteger nparamscheck;
     const SQChar *typemask;
+    SQUnsignedInteger intrinsic;
 }SQRegFunction;
 
 typedef struct tagSQFunctionInfo {

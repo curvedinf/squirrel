@@ -21,6 +21,12 @@ SQSharedState::SQSharedState()
     _notifyallexceptions = false;
     _foreignptr = NULL;
     _releasehook = NULL;
+    _cached_tostring_true.Null();
+    _cached_tostring_false.Null();
+    _cached_tostring_null.Null();
+    for(SQInteger i = 0; i < CACHED_TOSTRING_INT_COUNT; i++) {
+        _cached_tostring_ints[i].Null();
+    }
 }
 
 #define newsysstring(s) {   \
@@ -81,6 +87,7 @@ SQTable *CreateDefaultDelegate(SQSharedState *ss,const SQRegFunction *funcz)
         SQNativeClosure *nc = SQNativeClosure::Create(ss,funcz[i].f,0);
         nc->_nparamscheck = funcz[i].nparamscheck;
         nc->_name = SQString::Create(ss,funcz[i].name);
+        nc->_intrinsic = funcz[i].intrinsic;
         if(funcz[i].typemask && !CompileTypemask(nc->_typecheck,funcz[i].typemask))
             return NULL;
         t->NewSlot(SQString::Create(ss,funcz[i].name),nc);
@@ -89,8 +96,17 @@ SQTable *CreateDefaultDelegate(SQSharedState *ss,const SQRegFunction *funcz)
     return t;
 }
 
+static void CacheDelegateMethod(SQObjectPtr &slot,const SQObjectPtr &delegate,const SQObjectPtr &key)
+{
+    SQObjectPtr value;
+    if(_table(delegate)->Get(key,value)) {
+        slot = value;
+    }
+}
+
 void SQSharedState::Init()
 {
+    SQChar buf[NUMBER_MAX_CHAR + 1];
     _scratchpad=NULL;
     _scratchpadsize=0;
 #ifndef NO_GARBAGE_COLLECTOR
@@ -140,6 +156,17 @@ void SQSharedState::Init()
     newmetamethod(MM_INHERITED);
 
     _constructoridx = SQString::Create(this,_SC("constructor"));
+    _fast_delegate_keys[FDK_LEN] = SQString::Create(this,_SC("len"));
+    _fast_delegate_keys[FDK_TOINTEGER] = SQString::Create(this,_SC("tointeger"));
+    _fast_delegate_keys[FDK_TOFLOAT] = SQString::Create(this,_SC("tofloat"));
+    _fast_delegate_keys[FDK_TOSTRING] = SQString::Create(this,_SC("tostring"));
+    _cached_tostring_true = SQString::Create(this,_SC("true"));
+    _cached_tostring_false = SQString::Create(this,_SC("false"));
+    _cached_tostring_null = SQString::Create(this,_SC("null"));
+    for(SQInteger i = CACHED_TOSTRING_INT_MIN; i <= CACHED_TOSTRING_INT_MAX; i++) {
+        scsprintf(buf, sq_rsl(NUMBER_MAX_CHAR + 1), _PRINT_INT_FMT, i);
+        _cached_tostring_ints[i - CACHED_TOSTRING_INT_MIN] = SQString::Create(this, buf);
+    }
     _registry = SQTable::Create(this,0);
     _consts = SQTable::Create(this,0);
     _table_default_delegate = CreateDefaultDelegate(this,_table_default_delegate_funcz);
@@ -152,6 +179,17 @@ void SQSharedState::Init()
     _class_default_delegate = CreateDefaultDelegate(this,_class_default_delegate_funcz);
     _instance_default_delegate = CreateDefaultDelegate(this,_instance_default_delegate_funcz);
     _weakref_default_delegate = CreateDefaultDelegate(this,_weakref_default_delegate_funcz);
+    CacheDelegateMethod(_fast_delegate_methods[FDT_TABLE][FDK_LEN], _table_default_delegate, _fast_delegate_keys[FDK_LEN]);
+    CacheDelegateMethod(_fast_delegate_methods[FDT_TABLE][FDK_TOSTRING], _table_default_delegate, _fast_delegate_keys[FDK_TOSTRING]);
+    CacheDelegateMethod(_fast_delegate_methods[FDT_ARRAY][FDK_LEN], _array_default_delegate, _fast_delegate_keys[FDK_LEN]);
+    CacheDelegateMethod(_fast_delegate_methods[FDT_ARRAY][FDK_TOSTRING], _array_default_delegate, _fast_delegate_keys[FDK_TOSTRING]);
+    CacheDelegateMethod(_fast_delegate_methods[FDT_STRING][FDK_LEN], _string_default_delegate, _fast_delegate_keys[FDK_LEN]);
+    CacheDelegateMethod(_fast_delegate_methods[FDT_STRING][FDK_TOINTEGER], _string_default_delegate, _fast_delegate_keys[FDK_TOINTEGER]);
+    CacheDelegateMethod(_fast_delegate_methods[FDT_STRING][FDK_TOFLOAT], _string_default_delegate, _fast_delegate_keys[FDK_TOFLOAT]);
+    CacheDelegateMethod(_fast_delegate_methods[FDT_STRING][FDK_TOSTRING], _string_default_delegate, _fast_delegate_keys[FDK_TOSTRING]);
+    CacheDelegateMethod(_fast_delegate_methods[FDT_NUMBER][FDK_TOINTEGER], _number_default_delegate, _fast_delegate_keys[FDK_TOINTEGER]);
+    CacheDelegateMethod(_fast_delegate_methods[FDT_NUMBER][FDK_TOFLOAT], _number_default_delegate, _fast_delegate_keys[FDK_TOFLOAT]);
+    CacheDelegateMethod(_fast_delegate_methods[FDT_NUMBER][FDK_TOSTRING], _number_default_delegate, _fast_delegate_keys[FDK_TOSTRING]);
 }
 
 SQSharedState::~SQSharedState()
@@ -170,6 +208,20 @@ SQSharedState::~SQSharedState()
     }
     _thread(_root_vm)->Finalize();
     _root_vm.Null();
+    for(SQInteger i = 0; i < FDK_COUNT; i++) {
+        _fast_delegate_keys[i].Null();
+    }
+    for(SQInteger type = 0; type < FDT_COUNT; type++) {
+        for(SQInteger key = 0; key < FDK_COUNT; key++) {
+            _fast_delegate_methods[type][key].Null();
+        }
+    }
+    _cached_tostring_true.Null();
+    _cached_tostring_false.Null();
+    _cached_tostring_null.Null();
+    for(SQInteger i = 0; i < CACHED_TOSTRING_INT_COUNT; i++) {
+        _cached_tostring_ints[i].Null();
+    }
     _table_default_delegate.Null();
     _array_default_delegate.Null();
     _string_default_delegate.Null();

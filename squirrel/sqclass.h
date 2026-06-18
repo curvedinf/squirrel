@@ -37,6 +37,9 @@ public:
     }
     ~SQClass();
     bool NewSlot(SQSharedState *ss, const SQObjectPtr &key,const SQObjectPtr &val,bool bstatic);
+    bool Exists(const SQObjectPtr &key) {
+        return _members->Exists(key);
+    }
     bool Get(const SQObjectPtr &key,SQObjectPtr &val) {
         if(_members->Get(key,val)) {
             if(_isfield(val)) {
@@ -115,6 +118,9 @@ public:
         return newinst;
     }
     ~SQInstance();
+    bool Exists(const SQObjectPtr &key) {
+        return _class->_members->Exists(key);
+    }
     bool Get(const SQObjectPtr &key,SQObjectPtr &val)  {
         if(_class->_members->Get(key,val)) {
             if(_isfield(val)) {

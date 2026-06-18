@@ -65,9 +65,11 @@ public:
 #endif
     inline _HashNode *_Get(const SQObjectPtr &key,SQHash hash)
     {
+        SQRawObjectVal raw = _rawval(key);
+        SQObjectType type = sq_type(key);
         _HashNode *n = &_nodes[hash];
         do{
-            if(_rawval(n->key) == _rawval(key) && sq_type(n->key) == sq_type(key)){
+            if(_rawval(n->key) == raw && sq_type(n->key) == type){
                 return n;
             }
         }while((n = n->next));
@@ -90,6 +92,12 @@ public:
             return true;
         }
         return false;
+    }
+    inline bool Exists(const SQObjectPtr &key)
+    {
+        if(sq_type(key) == OT_NULL)
+            return false;
+        return _Get(key, HashObj(key) & (_numofnodes - 1)) != NULL;
     }
     bool Get(const SQObjectPtr &key,SQObjectPtr &val);
     void Remove(const SQObjectPtr &key);

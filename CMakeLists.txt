@@ -8,6 +8,11 @@ project(squirrel
 
 option(DISABLE_STATIC "Avoid building/installing static libraries.")
 option(LONG_OUTPUT_NAMES "Use longer names for binaries and libraries: squirrel3 (not sq).")
+option(SQ_BUILD_BENCHMARKS "Build benchmark runner and include benchmark workloads." ON)
+option(SQ_USE_FNO_SEMANTIC_INTERPOSITION "Use -fno-semantic-interposition for GCC non-Debug builds." ON)
+set(SQ_PGO_MODE "OFF" CACHE STRING "PGO mode for GCC builds: OFF, GENERATE, or USE.")
+set_property(CACHE SQ_PGO_MODE PROPERTY STRINGS OFF GENERATE USE)
+set(SQ_PGO_PROFILE_DIR "${CMAKE_BINARY_DIR}/pgo-data" CACHE PATH "Directory used to store or consume PGO profile data.")
 
 if (NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "Release")
@@ -19,6 +24,32 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_BINDIR
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${PROJECT_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR}")
 set(CMAKE_CXX_STANDARD 11)
+
+if(NOT SQ_PGO_MODE STREQUAL "OFF")
+  if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    message(FATAL_ERROR "SQ_PGO_MODE currently supports GCC builds only.")
+  endif()
+
+  if(SQ_PGO_MODE STREQUAL "GENERATE")
+    set(_sq_pgo_flags
+      "-fprofile-generate=${SQ_PGO_PROFILE_DIR}"
+      )
+  elseif(SQ_PGO_MODE STREQUAL "USE")
+    set(_sq_pgo_flags
+      "-fprofile-use=${SQ_PGO_PROFILE_DIR}"
+      "-fprofile-correction"
+      )
+  else()
+    message(FATAL_ERROR "SQ_PGO_MODE must be one of: OFF, GENERATE, USE.")
+  endif()
+
+  add_compile_options(${_sq_pgo_flags})
+  if(COMMAND add_link_options)
+    add_link_options(${_sq_pgo_flags})
+  else()
+    link_libraries(${_sq_pgo_flags})
+  endif()
+endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX)
   add_compile_options(
@@ -33,6 +64,18 @@ if(CMAKE_COMPILER_IS_GNUCXX)
     "$<$<CONFIG:MinSizeRel>:-Os>"
     "$<$<CONFIG:Debug>:-pg;-pie;-gstabs;-g3;-Og>"
     )
+  if(SQ_USE_FNO_SEMANTIC_INTERPOSITION)
+    add_compile_options(
+      "$<$<NOT:$<CONFIG:Debug>>:-fno-semantic-interposition>"
+      )
+    if(COMMAND add_link_options)
+      add_link_options(
+        "$<$<NOT:$<CONFIG:Debug>>:-fno-semantic-interposition>"
+        )
+    else()
+      link_libraries(-fno-semantic-interposition)
+    endif()
+  endif()
 elseif(MSVC)
   set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
   add_definitions(-D_CRT_SECURE_NO_WARNINGS)
@@ -51,6 +94,9 @@ add_subdirectory(squirrel)
 add_subdirectory(sqstdlib)
 if(NOT SQ_DISABLE_INTERPRETER)
   add_subdirectory(sq)
+endif()
+if(SQ_BUILD_BENCHMARKS)
+  add_subdirectory(benchmarks)
 endif()
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)

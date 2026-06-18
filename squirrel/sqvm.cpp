@@ -18,6 +18,81 @@
 #define TARGET _stack._vals[_stackbase+arg0]
 #define STK(a) _stack._vals[_stackbase+(a)]
 
+static bool FastStr2Num(const SQChar *s,SQObjectPtr &res,SQInteger base)
+{
+    SQChar *end;
+    const SQChar *e = s;
+    bool iseintbase = base > 13;
+    bool isfloat = false;
+    SQChar c;
+    while((c = *e) != _SC('\0'))
+    {
+        if(c == _SC('.') || (!iseintbase && (c == _SC('E') || c == _SC('e')))) {
+            isfloat = true;
+            break;
+        }
+        e++;
+    }
+    if(isfloat) {
+        SQFloat r = SQFloat(scstrtod(s,&end));
+        if(s == end) return false;
+        res = r;
+    }
+    else {
+        SQInteger r = SQInteger(scstrtol(s,&end,(int)base));
+        if(s == end) return false;
+        res = r;
+    }
+    return true;
+}
+
+static SQInteger FastDelegateTypeForCall(const SQObjectPtr &self, bool include_tables)
+{
+    switch(sq_type(self)) {
+    case OT_TABLE: return include_tables ? SQSharedState::FDT_TABLE : -1;
+    case OT_ARRAY: return SQSharedState::FDT_ARRAY;
+    case OT_STRING: return SQSharedState::FDT_STRING;
+    case OT_INTEGER:
+    case OT_FLOAT:
+    case OT_BOOL: return SQSharedState::FDT_NUMBER;
+    default: return -1;
+    }
+}
+
+static SQInteger FastDelegateKeyForCall(SQSharedState *ss, const SQObjectPtr &key)
+{
+    if(sq_type(key) != OT_STRING) {
+        return -1;
+    }
+    if(_rawval(key) == _rawval(ss->_fast_delegate_keys[SQSharedState::FDK_LEN])) {
+        return SQSharedState::FDK_LEN;
+    }
+    if(_rawval(key) == _rawval(ss->_fast_delegate_keys[SQSharedState::FDK_TOINTEGER])) {
+        return SQSharedState::FDK_TOINTEGER;
+    }
+    if(_rawval(key) == _rawval(ss->_fast_delegate_keys[SQSharedState::FDK_TOFLOAT])) {
+        return SQSharedState::FDK_TOFLOAT;
+    }
+    if(_rawval(key) == _rawval(ss->_fast_delegate_keys[SQSharedState::FDK_TOSTRING])) {
+        return SQSharedState::FDK_TOSTRING;
+    }
+    return -1;
+}
+
+static bool TryDirectContainerGet(const SQObjectPtr &self, const SQObjectPtr &key, SQObjectPtr &dest)
+{
+    switch(sq_type(self)) {
+    case OT_TABLE:
+        return _table(self)->Get(key, dest);
+    case OT_CLASS:
+        return _class(self)->Get(key, dest);
+    case OT_INSTANCE:
+        return _instance(self)->Get(key, dest);
+    default:
+        return false;
+    }
+}
+
 bool SQVM::BW_OP(SQUnsignedInteger op,SQObjectPtr &trg,const SQObjectPtr &o1,const SQObjectPtr &o2)
 {
     SQInteger res;
@@ -290,15 +365,21 @@ bool SQVM::ToString(const SQObjectPtr &o,SQObjectPtr &res)
     case OT_FLOAT:
         scsprintf(_sp(sq_rsl(NUMBER_MAX_CHAR+1)),sq_rsl(NUMBER_MAX_CHAR),_SC("%g"),_float(o));
         break;
-    case OT_INTEGER:
+    case OT_INTEGER: {
+        SQInteger n = _integer(o);
+        if(n >= SQSharedState::CACHED_TOSTRING_INT_MIN && n <= SQSharedState::CACHED_TOSTRING_INT_MAX) {
+            res = _sharedstate->_cached_tostring_ints[n - SQSharedState::CACHED_TOSTRING_INT_MIN];
+            return true;
+        }
         scsprintf(_sp(sq_rsl(NUMBER_MAX_CHAR+1)),sq_rsl(NUMBER_MAX_CHAR),_PRINT_INT_FMT,_integer(o));
         break;
+    }
     case OT_BOOL:
-        scsprintf(_sp(sq_rsl(6)),sq_rsl(6),_integer(o)?_SC("true"):_SC("false"));
-        break;
+        res = _integer(o) ? _sharedstate->_cached_tostring_true : _sharedstate->_cached_tostring_false;
+        return true;
     case OT_NULL:
-        scsprintf(_sp(sq_rsl(5)),sq_rsl(5),_SC("null"));
-        break;
+        res = _sharedstate->_cached_tostring_null;
+        return true;
     case OT_TABLE:
     case OT_USERDATA:
     case OT_INSTANCE:
@@ -324,17 +405,25 @@ bool SQVM::ToString(const SQObjectPtr &o,SQObjectPtr &res)
 
 bool SQVM::StringCat(const SQObjectPtr &str,const SQObjectPtr &obj,SQObjectPtr &dest)
 {
-    SQObjectPtr a, b;
-    if(!ToString(str, a)) return false;
-    if(!ToString(obj, b)) return false;
-    SQInteger l = _string(a)->_len , ol = _string(b)->_len;
+    const SQObjectPtr *a = &str;
+    const SQObjectPtr *b = &obj;
+    SQObjectPtr atmp, btmp;
+    if(sq_type(str) != OT_STRING) {
+        if(!ToString(str, atmp)) return false;
+        a = &atmp;
+    }
+    if(sq_type(obj) != OT_STRING) {
+        if(!ToString(obj, btmp)) return false;
+        b = &btmp;
+    }
+    SQInteger l = _string(*a)->_len , ol = _string(*b)->_len;
 #ifdef SQ_NO_FAST_STRINGCAT
     SQChar* s = _sp(sq_rsl(l + ol + 1));
-    memcpy(s, _stringval(a), sq_rsl(l));
-    memcpy(s + l, _stringval(b), sq_rsl(ol));
+    memcpy(s, _stringval(*a), sq_rsl(l));
+    memcpy(s + l, _stringval(*b), sq_rsl(ol));
     dest = SQString::Create(_ss(this), _spval, l + ol);
 #else
-    dest = SQString::Concat(_ss(this),_stringval(a),l,_stringval(b),ol);
+    dest = SQString::Concat(_ss(this),_stringval(*a),l,_stringval(*b),ol);
 #endif
     return true;
 }
@@ -347,6 +436,25 @@ bool SQVM::TypeOf(const SQObjectPtr &obj1,SQObjectPtr &dest)
             Push(obj1);
             return CallMetaMethod(closure,MT_TYPEOF,1,dest);
         }
+    }
+    switch(sq_type(obj1)) {
+    case OT_NULL: dest = (*_sharedstate->_systemstrings)[0]; return true;
+    case OT_TABLE: dest = (*_sharedstate->_systemstrings)[1]; return true;
+    case OT_ARRAY: dest = (*_sharedstate->_systemstrings)[2]; return true;
+    case OT_STRING: dest = (*_sharedstate->_systemstrings)[4]; return true;
+    case OT_USERDATA: dest = (*_sharedstate->_systemstrings)[5]; return true;
+    case OT_INTEGER: dest = (*_sharedstate->_systemstrings)[6]; return true;
+    case OT_FLOAT: dest = (*_sharedstate->_systemstrings)[7]; return true;
+    case OT_USERPOINTER: dest = (*_sharedstate->_systemstrings)[8]; return true;
+    case OT_CLOSURE:
+    case OT_NATIVECLOSURE:
+    case OT_FUNCPROTO: dest = (*_sharedstate->_systemstrings)[9]; return true;
+    case OT_GENERATOR: dest = (*_sharedstate->_systemstrings)[10]; return true;
+    case OT_THREAD: dest = (*_sharedstate->_systemstrings)[11]; return true;
+    case OT_CLASS: dest = (*_sharedstate->_systemstrings)[12]; return true;
+    case OT_INSTANCE: dest = (*_sharedstate->_systemstrings)[13]; return true;
+    case OT_BOOL: dest = (*_sharedstate->_systemstrings)[14]; return true;
+    default: break;
     }
     dest = SQString::Create(_ss(this),GetTypeName(obj1));
     return true;
@@ -519,6 +627,98 @@ SQRESULT SQVM::Suspend()
     if (_nnativecalls!=2)
         return sq_throwerror(this, _SC("cannot suspend through native calls/metamethods"));
     return SQ_SUSPEND_FLAG;
+}
+
+SQInteger SQVM::TryFastCallNative(SQNativeClosure *nclosure, SQInteger nargs, SQInteger newbase, SQObjectPtr &retval, bool &suspend, bool &tailcall)
+{
+    suspend = false;
+    tailcall = false;
+    SQObjectPtr &self = _stack._vals[newbase];
+
+    switch(nclosure->_intrinsic) {
+    case SQ_NCI_DEFAULT_LEN:
+        switch(sq_type(self)) {
+        case OT_TABLE: retval = SQInteger(_table(self)->CountUsed()); return 1;
+        case OT_ARRAY: retval = SQInteger(_array(self)->Size()); return 1;
+        case OT_STRING: retval = SQInteger(_string(self)->_len); return 1;
+        default: return 0;
+        }
+    case SQ_NCI_DEFAULT_TOFLOAT:
+        switch(sq_type(self)) {
+        case OT_STRING: {
+            SQObjectPtr parsed;
+            if(!FastStr2Num(_stringval(self), parsed, 10)) {
+                Raise_Error(_SC("cannot convert the string"));
+                return -1;
+            }
+            retval = SQObjectPtr(tofloat(parsed));
+            return 1;
+        }
+        case OT_INTEGER:
+        case OT_FLOAT:
+            retval = SQObjectPtr(tofloat(self));
+            return 1;
+        case OT_BOOL:
+            retval = SQObjectPtr((SQFloat)(_integer(self) ? 1 : 0));
+            return 1;
+        default:
+            return 0;
+        }
+    case SQ_NCI_DEFAULT_TOINTEGER:
+        switch(sq_type(self)) {
+        case OT_STRING: {
+            SQInteger base = 10;
+            if(nargs > 1) {
+                base = tointeger(_stack._vals[newbase + 1]);
+            }
+            SQObjectPtr parsed;
+            if(!FastStr2Num(_stringval(self), parsed, base)) {
+                Raise_Error(_SC("cannot convert the string"));
+                return -1;
+            }
+            retval = SQObjectPtr(tointeger(parsed));
+            return 1;
+        }
+        case OT_INTEGER:
+        case OT_FLOAT:
+            retval = SQObjectPtr(tointeger(self));
+            return 1;
+        case OT_BOOL:
+            retval = SQObjectPtr(_integer(self) ? (SQInteger)1 : (SQInteger)0);
+            return 1;
+        default:
+            return 0;
+        }
+    case SQ_NCI_DEFAULT_TOSTRING:
+        return ToString(self, retval) ? 1 : -1;
+    case SQ_NCI_STRING_SLICE:
+        if(sq_type(self) == OT_STRING) {
+            SQInteger sidx = 0;
+            SQInteger slen = _string(self)->_len;
+            SQInteger eidx = slen;
+            if(nargs > 1) {
+                sidx = tointeger(_stack._vals[newbase + 1]);
+            }
+            if(nargs > 2) {
+                eidx = tointeger(_stack._vals[newbase + 2]);
+            }
+            if(sidx < 0) sidx = slen + sidx;
+            if(eidx < 0) eidx = slen + eidx;
+            if(eidx < sidx) {
+                Raise_Error(_SC("wrong indexes"));
+                return -1;
+            }
+            if(eidx > slen || sidx < 0) {
+                Raise_Error(_SC("slice out of range"));
+                return -1;
+            }
+            retval = SQString::Create(_ss(this), &_stringval(self)[sidx], eidx - sidx);
+            return 1;
+        }
+        return 0;
+    default:
+        return 0;
+    }
 }
 
 
@@ -842,15 +1042,87 @@ exception_restore:
             case _OP_PREPCALLK: {
                     SQObjectPtr &key = _i_.op == _OP_PREPCALLK?(ci->_literals)[arg1]:STK(arg1);
                     SQObjectPtr &o = STK(arg2);
-                    if (!Get(o, key, temp_reg,0,arg2)) {
+                    if(_i_.op == _OP_PREPCALLK) {
+                        const SQInstruction &nexti = *ci->_ip;
+                        if(nexti.op == _OP_CALL && nexti._arg1 == arg0 && nexti._arg2 == arg3) {
+                            SQInteger fasttype = FastDelegateTypeForCall(o, false);
+                            SQInteger fastkey = FastDelegateKeyForCall(_sharedstate, key);
+                            if(fasttype != -1 && fastkey != -1) {
+                                SQObjectPtr &cached = _sharedstate->_fast_delegate_methods[fasttype][fastkey];
+                                if(sq_type(cached) == OT_NATIVECLOSURE) {
+                                    SQInteger calltarget = (SQInteger)*((const signed char *)&nexti._arg0);
+                                    bool suspend;
+                                    bool tailcall;
+                                    SQObjectPtr clo = cached;
+                                    STK(arg3) = o;
+                                    ci->_ip++;
+                                    _GUARD(CallNative(_nativeclosure(clo), nexti._arg3, _stackbase + nexti._arg2, clo, (SQInt32)calltarget, suspend, tailcall));
+                                    if(suspend){
+                                        _suspended = SQTrue;
+                                        _suspended_target = calltarget;
+                                        _suspended_root = ci->_root;
+                                        _suspended_traps = traps;
+                                        outres = clo;
+                                        return true;
+                                    }
+                                    if(calltarget != -1 && !tailcall) {
+                                        STK(nexti._arg0) = clo;
+                                    }
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    if(_i_.op == _OP_PREPCALLK) {
+                        if(!TryDirectContainerGet(o, key, temp_reg) && !Get(o, key, temp_reg, 0, arg2)) {
+                            SQ_THROW();
+                        }
+                    }
+                    else if(!Get(o, key, temp_reg,0,arg2)) {
                         SQ_THROW();
+                    }
+                    if(_i_.op == _OP_PREPCALLK) {
+                        const SQInstruction &nexti = *ci->_ip;
+                        if(nexti.op == _OP_CALL && nexti._arg1 == arg0 && nexti._arg2 == arg3) {
+                            SQInteger calltarget = (SQInteger)*((const signed char *)&nexti._arg0);
+                            switch(sq_type(temp_reg)) {
+                            case OT_CLOSURE:
+                                STK(arg3) = o;
+                                ci->_ip++;
+                                _GUARD(StartCall(_closure(temp_reg), calltarget, nexti._arg3, _stackbase + nexti._arg2, false));
+                                continue;
+                            case OT_NATIVECLOSURE: {
+                                bool suspend;
+                                bool tailcall;
+                                SQObjectPtr clo = temp_reg;
+                                STK(arg3) = o;
+                                ci->_ip++;
+                                _GUARD(CallNative(_nativeclosure(clo), nexti._arg3, _stackbase + nexti._arg2, clo, (SQInt32)calltarget, suspend, tailcall));
+                                if(suspend){
+                                    _suspended = SQTrue;
+                                    _suspended_target = calltarget;
+                                    _suspended_root = ci->_root;
+                                    _suspended_traps = traps;
+                                    outres = clo;
+                                    return true;
+                                }
+                                if(calltarget != -1 && !tailcall) {
+                                    STK(nexti._arg0) = clo;
+                                }
+                                continue;
+                            }
+                            default:
+                                break;
+                            }
+                        }
                     }
                     STK(arg3) = o;
                     _Swap(TARGET,temp_reg);//TARGET = temp_reg;
                 }
                 continue;
             case _OP_GETK:
-                if (!Get(STK(arg2), ci->_literals[arg1], temp_reg, 0,arg2)) { SQ_THROW();}
+                if (!TryDirectContainerGet(STK(arg2), ci->_literals[arg1], temp_reg) &&
+                    !Get(STK(arg2), ci->_literals[arg1], temp_reg, 0,arg2)) { SQ_THROW();}
                 _Swap(TARGET,temp_reg);//TARGET = temp_reg;
                 continue;
             case _OP_MOVE: TARGET = STK(arg1); continue;
@@ -994,7 +1266,37 @@ exception_restore:
 
                         } continue;
             case _OP_CMP:   _GUARD(CMP_OP((CmpOP)arg3,STK(arg2),STK(arg1),TARGET))  continue;
-            case _OP_EXISTS: TARGET = Get(STK(arg1), STK(arg2), temp_reg, GET_FLAG_DO_NOT_RAISE_ERROR | GET_FLAG_RAW, DONT_FALL_BACK) ? true : false; continue;
+            case _OP_EXISTS: {
+                const SQObjectPtr &self = STK(arg1);
+                const SQObjectPtr &key = STK(arg2);
+                switch(sq_type(self)) {
+                case OT_TABLE:
+                    TARGET = _table(self)->Exists(key) ? true : false;
+                    continue;
+                case OT_ARRAY:
+                    TARGET = (sq_isnumeric(key) && tointeger(key) >= 0 && tointeger(key) < _array(self)->Size()) ? true : false;
+                    continue;
+                case OT_INSTANCE:
+                    TARGET = _instance(self)->Exists(key) ? true : false;
+                    continue;
+                case OT_CLASS:
+                    TARGET = _class(self)->Exists(key) ? true : false;
+                    continue;
+                case OT_STRING:
+                    if(sq_isnumeric(key)) {
+                        SQInteger n = tointeger(key);
+                        SQInteger len = _string(self)->_len;
+                        if (n < 0) { n += len; }
+                        TARGET = (n >= 0 && n < len) ? true : false;
+                        continue;
+                    }
+                    TARGET = false;
+                    continue;
+                default:
+                    TARGET = false;
+                    continue;
+                }
+            }
             case _OP_INSTANCEOF:
                 if(sq_type(STK(arg1)) != OT_CLASS)
                 {Raise_Error(_SC("cannot apply instanceof between a %s and a %s"),GetTypeName(STK(arg1)),GetTypeName(STK(arg2))); SQ_THROW();}
@@ -1203,6 +1505,11 @@ bool SQVM::CallNative(SQNativeClosure *nclosure, SQInteger nargs, SQInteger newb
         }
     }
 
+    SQInteger fastcall = TryFastCallNative(nclosure, nargs, newbase, retval, suspend, tailcall);
+    if(fastcall != 0) {
+        return fastcall > 0;
+    }
+
     if(!EnterFrame(newbase, newtop, false)) return false;
     ci->_closure  = nclosure;
 	ci->_target = target;
@@ -1321,6 +1628,16 @@ bool SQVM::Get(const SQObjectPtr &self, const SQObjectPtr &key, SQObjectPtr &des
 
 bool SQVM::InvokeDefaultDelegate(const SQObjectPtr &self,const SQObjectPtr &key,SQObjectPtr &dest)
 {
+    SQInteger fasttype = FastDelegateTypeForCall(self, true);
+    SQInteger fastkey = FastDelegateKeyForCall(_sharedstate, key);
+    if(fasttype != -1 && fastkey != -1) {
+        SQObjectPtr &cached = _sharedstate->_fast_delegate_methods[fasttype][fastkey];
+        if(sq_type(cached) != OT_NULL) {
+            dest = cached;
+            return true;
+        }
+    }
+
     SQTable *ddel = NULL;
     switch(sq_type(self)) {
         case OT_CLASS: ddel = _class_ddel; break;

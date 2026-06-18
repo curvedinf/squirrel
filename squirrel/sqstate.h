@@ -59,6 +59,25 @@ struct SQObjectPtr;
 
 struct SQSharedState
 {
+    enum {
+        CACHED_TOSTRING_INT_MIN = -32,
+        CACHED_TOSTRING_INT_MAX = 255,
+        CACHED_TOSTRING_INT_COUNT = (CACHED_TOSTRING_INT_MAX - CACHED_TOSTRING_INT_MIN) + 1
+    };
+    enum FastDelegateKey {
+        FDK_LEN = 0,
+        FDK_TOINTEGER,
+        FDK_TOFLOAT,
+        FDK_TOSTRING,
+        FDK_COUNT
+    };
+    enum FastDelegateType {
+        FDT_TABLE = 0,
+        FDT_ARRAY,
+        FDT_STRING,
+        FDT_NUMBER,
+        FDT_COUNT
+    };
     SQSharedState();
     ~SQSharedState();
     void Init();
@@ -104,6 +123,12 @@ public:
     static const SQRegFunction _instance_default_delegate_funcz[];
     SQObjectPtr _weakref_default_delegate;
     static const SQRegFunction _weakref_default_delegate_funcz[];
+    SQObjectPtr _fast_delegate_keys[FDK_COUNT];
+    SQObjectPtr _fast_delegate_methods[FDT_COUNT][FDK_COUNT];
+    SQObjectPtr _cached_tostring_true;
+    SQObjectPtr _cached_tostring_false;
+    SQObjectPtr _cached_tostring_null;
+    SQObjectPtr _cached_tostring_ints[CACHED_TOSTRING_INT_COUNT];
 
     SQCOMPILERERROR _compilererrorhandler;
     SQPRINTFUNCTION _printfunc;
