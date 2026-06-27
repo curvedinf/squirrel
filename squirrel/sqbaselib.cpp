@@ -857,14 +857,13 @@ static bool _hsort_sift_down(HSQUIRRELVM v,SQArray *arr, SQInteger root, SQInteg
     return true;
 }
 
-static bool _insertion_sort(HSQUIRRELVM v, SQArray *arr, const SQObjectPtr *func, SQInteger comparebase)
+static bool _insertion_sort_range(HSQUIRRELVM v, SQArray *arr, SQInteger left, SQInteger right, const SQObjectPtr *func, SQInteger comparebase)
 {
-    SQInteger array_size = arr->Size();
-    for(SQInteger i = 1; i < array_size; i++) {
+    for(SQInteger i = left + 1; i <= right; i++) {
         SQObjectPtr value = arr->_values[i];
         SQInteger j = i - 1;
         SQInteger ret;
-        while(j >= 0) {
+        while(j >= left) {
             if(!_sort_compare(v, arr, arr->_values[j], value, func, comparebase, ret)) {
                 return false;
             }
@@ -879,13 +878,112 @@ static bool _insertion_sort(HSQUIRRELVM v, SQArray *arr, const SQObjectPtr *func
     return true;
 }
 
+static bool _quicksort(HSQUIRRELVM v, SQArray *arr, SQInteger left, SQInteger right, const SQObjectPtr *func, SQInteger comparebase)
+{
+    struct SortRange {
+        SQInteger left;
+        SQInteger right;
+    };
+    SortRange stack[64];
+    SQInteger top = 0;
+    stack[top].left = left;
+    stack[top].right = right;
+    top++;
+
+    while(top > 0) {
+        SortRange range = stack[--top];
+        while(range.right - range.left >= 16) {
+            SQInteger ret;
+            SQInteger mid = range.left + ((range.right - range.left) >> 1);
+
+            if(!_sort_compare(v, arr, arr->_values[range.left], arr->_values[mid], func, comparebase, ret)) {
+                return false;
+            }
+            if(ret > 0) {
+                _Swap(arr->_values[range.left], arr->_values[mid]);
+            }
+
+            if(!_sort_compare(v, arr, arr->_values[mid], arr->_values[range.right], func, comparebase, ret)) {
+                return false;
+            }
+            if(ret > 0) {
+                _Swap(arr->_values[mid], arr->_values[range.right]);
+            }
+
+            if(!_sort_compare(v, arr, arr->_values[range.left], arr->_values[mid], func, comparebase, ret)) {
+                return false;
+            }
+            if(ret > 0) {
+                _Swap(arr->_values[range.left], arr->_values[mid]);
+            }
+
+            SQObjectPtr pivot = arr->_values[mid];
+            SQInteger i = range.left;
+            SQInteger j = range.right;
+
+            for(;;) {
+                while(i <= range.right) {
+                    if(!_sort_compare(v, arr, arr->_values[i], pivot, func, comparebase, ret)) {
+                        return false;
+                    }
+                    if(ret >= 0) {
+                        break;
+                    }
+                    i++;
+                }
+                while(j >= range.left) {
+                    if(!_sort_compare(v, arr, pivot, arr->_values[j], func, comparebase, ret)) {
+                        return false;
+                    }
+                    if(ret >= 0) {
+                        break;
+                    }
+                    j--;
+                }
+                if(i > j) {
+                    break;
+                }
+                _Swap(arr->_values[i], arr->_values[j]);
+                i++;
+                j--;
+            }
+
+            if((j - range.left) < (range.right - i)) {
+                if(i < range.right) {
+                    stack[top].left = i;
+                    stack[top].right = range.right;
+                    top++;
+                }
+                range.right = j;
+            }
+            else {
+                if(range.left < j) {
+                    stack[top].left = range.left;
+                    stack[top].right = j;
+                    top++;
+                }
+                range.left = i;
+            }
+        }
+        if(range.left < range.right) {
+            if(!_insertion_sort_range(v, arr, range.left, range.right, func, comparebase)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool _hsort(HSQUIRRELVM v,SQObjectPtr &arr, SQInteger SQ_UNUSED_ARG(l), SQInteger SQ_UNUSED_ARG(r),const SQObjectPtr *func, SQInteger comparebase)
 {
     SQArray *a = _array(arr);
     SQInteger i;
     SQInteger array_size = a->Size();
+    if(func != NULL) {
+        return _quicksort(v, a, 0, array_size - 1, func, comparebase);
+    }
     if(array_size < 16) {
-        return _insertion_sort(v, a, func, comparebase);
+        return _insertion_sort_range(v, a, 0, array_size - 1, func, comparebase);
     }
     for (i = (array_size / 2) - 1; i >= 0; i--) {
         if(!_hsort_sift_down(v,a, i, array_size - 1,func,comparebase)) return false;
