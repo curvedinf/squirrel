@@ -248,10 +248,14 @@ struct SQObjectPtr : public SQObject
     }
     inline SQObjectPtr& operator=(bool b)
     {
+        SQInteger next = b ? 1 : 0;
+        if(_type == OT_BOOL && _unVal.nInteger == next) {
+            return *this;
+        }
         __Release(_type,_unVal);
         SQ_OBJECT_RAWINIT()
         _type = OT_BOOL;
-        _unVal.nInteger = b?1:0;
+        _unVal.nInteger = next;
         return *this;
     }
 
@@ -286,6 +290,9 @@ struct SQObjectPtr : public SQObject
     }
     inline void Null()
     {
+        if(_type == OT_NULL) {
+            return;
+        }
         SQObjectType tOldType = _type;
         SQObjectValue unOldVal = _unVal;
         _type = OT_NULL;

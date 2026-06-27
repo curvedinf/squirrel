@@ -26,11 +26,11 @@ taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benc
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
-| `registry_catalog` | `19.302` | `727105` |
-| `world_map_graph` | `53.996` | `325170` |
-| `inventory_flow` | `79.207` | `812233` |
+| `registry_catalog` | `18.804` | `727105` |
+| `world_map_graph` | `52.961` | `325170` |
+| `inventory_flow` | `76.832` | `812233` |
 
-This baseline came from retaining a full-hash guard before `memcmp()` in `SQStringTable::Concat()` / `Add()` over a fresh pinned rerun of the prior retained PGO+LTO head of `18.994 / 54.189 / 80.237 ms`. The clean retry was `19.085 / 53.473 / 77.881 ms` (`+1.943%` overall), and the confirmation run promoted here was `19.302 / 53.996 / 79.207 ms` (`+0.596%` overall).
+This baseline came from retaining same-value fast paths in `SQObjectPtr::operator=(bool)` and `SQObjectPtr::Null()` over a fresh pinned rerun of the prior retained PGO+LTO head of `19.633 / 54.329 / 79.579 ms`. The clean retry was `19.100 / 54.267 / 78.035 ms` (`+1.393%` overall), and the confirmation run promoted here was `18.804 / 52.961 / 76.832 ms` (`+3.220%` overall).
 
 ## Historical Reference Baselines
 
@@ -41,11 +41,11 @@ Build: `./build-pgo-lto/bin/sqbench`
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
-| `registry_catalog` | `18.994` | `727105` |
-| `world_map_graph` | `54.189` | `325170` |
-| `inventory_flow` | `80.237` | `812233` |
+| `registry_catalog` | `19.633` | `727105` |
+| `world_map_graph` | `54.329` | `325170` |
+| `inventory_flow` | `79.579` | `812233` |
 
-This was a fresh pinned rerun of the previously retained PGO+LTO head, taken to compare the full-hash-guard candidate in the current machine state before promotion.
+This was a fresh pinned rerun of the previously retained PGO+LTO head, taken to compare the bool/null cleanup fast-path candidate in the current machine state before promotion.
 
 ### Earlier Prior Retained-Head Baseline
 
@@ -180,6 +180,7 @@ Some earlier runs were kept before this ledger existed. Where exact per-workload
 
 | Change | Baseline used | Result | Overall |
 | --- | --- | --- | ---: |
+| Same-value fast paths in `SQObjectPtr::operator=(bool)` and `SQObjectPtr::Null()` | refreshed retained PGO+LTO head `19.633 / 54.329 / 79.579 ms` | clean retry: `19.100 / 54.267 / 78.035 ms` (`+1.393%`); confirmation promoted: `18.804 / 52.961 / 76.832 ms` | `+3.220%` |
 | Full-hash guard before `memcmp()` in `SQStringTable::Concat()` / `Add()` | refreshed retained PGO+LTO head `18.994 / 54.189 / 80.237 ms` | clean retry: `19.085 / 53.473 / 77.881 ms` (`+1.943%`); confirmation promoted: `19.302 / 53.996 / 79.207 ms` | `+0.596%` |
 | Interned string-key specialized direct get paths for `table` / `class` / `instance` lookups and default delegates | retained PGO+LTO head `18.586 / 52.975 / 81.885 ms` | clean retry: `18.471 / 53.055 / 78.777 ms` (`+2.048%`); confirmation promoted: `18.672 / 52.394 / 78.479 ms` | `+2.542%` |
 | Reused comparator call-frame slots across `array.sort()` callback invocations | refreshed retained PGO+LTO head `18.720 / 55.296 / 82.709 ms` | clean retry: `18.754 / 52.903 / 82.111 ms` (`+1.887%`); confirmation promoted: `18.586 / 52.975 / 81.885 ms` | `+2.092%` |
