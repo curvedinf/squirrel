@@ -26,15 +26,28 @@ taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benc
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
-| `registry_catalog` | `18.586` | `727105` |
-| `world_map_graph` | `52.975` | `325170` |
-| `inventory_flow` | `81.885` | `812233` |
+| `registry_catalog` | `18.672` | `727105` |
+| `world_map_graph` | `52.394` | `325170` |
+| `inventory_flow` | `78.479` | `812233` |
 
-This baseline came from retaining reusable comparator call-frame slots in `array.sort()` on top of a refreshed same-build measurement of the prior retained PGO+LTO head of `18.720 / 55.296 / 82.709 ms`, which was a `+2.092%` overall improvement.
+This baseline came from retaining interned string-key specialized direct get paths for `table` / `class` / `instance` lookups and default delegates over the prior retained PGO+LTO head of `18.586 / 52.975 / 81.885 ms`. The clean retry was `18.471 / 53.055 / 78.777 ms` (`+2.048%` overall), and the confirmation run promoted here was `18.672 / 52.394 / 78.479 ms` (`+2.542%` overall).
 
 ## Historical Reference Baselines
 
 ### Immediate Prior Refreshed Retained-Head Baseline
+
+Date: `2026-06-27`
+Build: `./build-pgo-lto/bin/sqbench`
+
+| Workload | run_avg_ms | checksum |
+| --- | ---: | ---: |
+| `registry_catalog` | `18.586` | `727105` |
+| `world_map_graph` | `52.975` | `325170` |
+| `inventory_flow` | `81.885` | `812233` |
+
+This was the frozen retained-head comparison target used for the string-key specialized direct-get experiment.
+
+### Earlier Prior Refreshed Retained-Head Baseline
 
 Date: `2026-06-27`
 Build: `./build-pgo-lto/bin/sqbench`
@@ -47,7 +60,7 @@ Build: `./build-pgo-lto/bin/sqbench`
 
 This was a fresh pinned rerun of the previously retained PGO+LTO head, taken to compare the next source-level candidate in the current machine state before promotion.
 
-### Immediate Prior Retained-Head Baseline
+### Earlier Prior PGO Retained-Head Baseline
 
 Date: `2026-06-18`
 Build: `./build-pgo-lto/bin/sqbench`
@@ -154,6 +167,7 @@ Some earlier runs were kept before this ledger existed. Where exact per-workload
 
 | Change | Baseline used | Result | Overall |
 | --- | --- | --- | ---: |
+| Interned string-key specialized direct get paths for `table` / `class` / `instance` lookups and default delegates | retained PGO+LTO head `18.586 / 52.975 / 81.885 ms` | clean retry: `18.471 / 53.055 / 78.777 ms` (`+2.048%`); confirmation promoted: `18.672 / 52.394 / 78.479 ms` | `+2.542%` |
 | Reused comparator call-frame slots across `array.sort()` callback invocations | refreshed retained PGO+LTO head `18.720 / 55.296 / 82.709 ms` | clean retry: `18.754 / 52.903 / 82.111 ms` (`+1.887%`); confirmation promoted: `18.586 / 52.975 / 81.885 ms` | `+2.092%` |
 | `_OP_EXISTS` fast path | earlier retained source head | exact absolute timings not preserved in this ledger | `+1.761%` |
 | `array.sort` comparator-call rewrite | earlier retained source / PGO heads | exact absolute timings not preserved in this ledger | `+2.834%` source, `+0.304%` PGO |
@@ -182,6 +196,14 @@ This older retained PGO snapshot predates the retained `-fno-semantic-interposit
 ## Rolled Back Results
 
 These candidates were benchmark-negative or otherwise not retained.
+
+### Re-evaluated against retained head `18.586 / 52.975 / 81.885 ms`
+
+These retries were run after retaining reusable comparator call-frame slots in `array.sort()`.
+
+| Change | Frozen baseline | Retry results | Outcome |
+| --- | --- | --- | --- |
+| Small-string exact-length freelist cache in `SQStringTable` | `18.586 / 52.975 / 81.885 ms` | clean retry: `19.369 / 65.549 / 132.573 ms` with matching checksums (`-41.736%` by total) | rolled back; clear regression |
 
 ### Re-evaluated against retained head `19.681 / 52.719 / 78.413 ms`
 

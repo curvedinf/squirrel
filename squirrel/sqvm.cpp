@@ -79,8 +79,25 @@ static SQInteger FastDelegateKeyForCall(SQSharedState *ss, const SQObjectPtr &ke
     return -1;
 }
 
+static bool TryDirectContainerGetStr(const SQObjectPtr &self, const SQString *key, SQObjectPtr &dest)
+{
+    switch(sq_type(self)) {
+    case OT_TABLE:
+        return _table(self)->GetStr(key, dest);
+    case OT_CLASS:
+        return _class(self)->GetStr(key, dest);
+    case OT_INSTANCE:
+        return _instance(self)->GetStr(key, dest);
+    default:
+        return false;
+    }
+}
+
 static bool TryDirectContainerGet(const SQObjectPtr &self, const SQObjectPtr &key, SQObjectPtr &dest)
 {
+    if(sq_type(key) == OT_STRING) {
+        return TryDirectContainerGetStr(self, _string(key), dest);
+    }
     switch(sq_type(self)) {
     case OT_TABLE:
         return _table(self)->Get(key, dest);
@@ -1574,18 +1591,28 @@ bool SQVM::TailCall(SQClosure *closure, SQInteger parambase,SQInteger nparams)
 
 bool SQVM::Get(const SQObjectPtr &self, const SQObjectPtr &key, SQObjectPtr &dest, SQUnsignedInteger getflags, SQInteger selfidx)
 {
+    SQString *strkey = sq_type(key) == OT_STRING ? _string(key) : NULL;
     switch(sq_type(self)){
     case OT_TABLE:
-        if(_table(self)->Get(key,dest))return true;
+        if(strkey) {
+            if(_table(self)->GetStr(strkey, dest)) return true;
+        }
+        else if(_table(self)->Get(key,dest)) return true;
         break;
     case OT_ARRAY:
         if (sq_isnumeric(key)) { if (_array(self)->Get(tointeger(key), dest)) { return true; } if ((getflags & GET_FLAG_DO_NOT_RAISE_ERROR) == 0) Raise_IdxError(key); return false; }
         break;
     case OT_INSTANCE:
-        if(_instance(self)->Get(key,dest)) return true;
+        if(strkey) {
+            if(_instance(self)->GetStr(strkey, dest)) return true;
+        }
+        else if(_instance(self)->Get(key,dest)) return true;
         break;
     case OT_CLASS:
-        if(_class(self)->Get(key,dest)) return true;
+        if(strkey) {
+            if(_class(self)->GetStr(strkey, dest)) return true;
+        }
+        else if(_class(self)->Get(key,dest)) return true;
         break;
     case OT_STRING:
         if(sq_isnumeric(key)){
@@ -1651,6 +1678,9 @@ bool SQVM::InvokeDefaultDelegate(const SQObjectPtr &self,const SQObjectPtr &key,
         case OT_THREAD: ddel = _thread_ddel; break;
         case OT_WEAKREF: ddel = _weakref_ddel; break;
         default: return false;
+    }
+    if(sq_type(key) == OT_STRING) {
+        return ddel->GetStr(_string(key), dest);
     }
     return  ddel->Get(key,dest);
 }

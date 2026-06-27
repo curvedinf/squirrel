@@ -40,6 +40,19 @@ public:
     bool Exists(const SQObjectPtr &key) {
         return _members->Exists(key);
     }
+    bool GetStr(const SQString *key,SQObjectPtr &val) {
+        if(_members->GetStr(key,val)) {
+            if(_isfield(val)) {
+                SQObjectPtr &o = _defaultvalues[_member_idx(val)].val;
+                val = _realval(o);
+            }
+            else {
+                val = _methods[_member_idx(val)].val;
+            }
+            return true;
+        }
+        return false;
+    }
     bool Get(const SQObjectPtr &key,SQObjectPtr &val) {
         if(_members->Get(key,val)) {
             if(_isfield(val)) {
@@ -120,6 +133,19 @@ public:
     ~SQInstance();
     bool Exists(const SQObjectPtr &key) {
         return _class->_members->Exists(key);
+    }
+    bool GetStr(const SQString *key,SQObjectPtr &val)  {
+        if(_class->_members->GetStr(key,val)) {
+            if(_isfield(val)) {
+                SQObjectPtr &o = _values[_member_idx(val)];
+                val = _realval(o);
+            }
+            else {
+                val = _class->_methods[_member_idx(val)].val;
+            }
+            return true;
+        }
+        return false;
     }
     bool Get(const SQObjectPtr &key,SQObjectPtr &val)  {
         if(_class->_members->Get(key,val)) {

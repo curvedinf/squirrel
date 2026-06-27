@@ -75,6 +75,16 @@ public:
         }while((n = n->next));
         return NULL;
     }
+    inline _HashNode *_GetStr(const SQString *key)
+    {
+        _HashNode *n = &_nodes[key->_hash & (_numofnodes - 1)];
+        do{
+            if(sq_type(n->key) == OT_STRING && _string(n->key) == key){
+                return n;
+            }
+        }while((n = n->next));
+        return NULL;
+    }
     //for compiler use
     inline bool GetStr(const SQChar* key,SQInteger keylen,SQObjectPtr &val)
     {
@@ -89,6 +99,15 @@ public:
         }while((n = n->next));
         if (res) {
             val = _realval(res->val);
+            return true;
+        }
+        return false;
+    }
+    inline bool GetStr(const SQString *key,SQObjectPtr &val)
+    {
+        _HashNode *n = _GetStr(key);
+        if (n) {
+            val = _realval(n->val);
             return true;
         }
         return false;
