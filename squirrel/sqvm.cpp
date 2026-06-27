@@ -1630,10 +1630,18 @@ bool SQVM::Get(const SQObjectPtr &self, const SQObjectPtr &key, SQObjectPtr &des
     default:break; //shut up compiler
     }
     if ((getflags & GET_FLAG_RAW) == 0) {
-        switch(FallBackGet(self,key,dest)) {
-            case FALLBACK_OK: return true; //okie
-            case FALLBACK_NO_MATCH: break; //keep falling back
-            case FALLBACK_ERROR: return false; // the metamethod failed
+        switch(sq_type(self)) {
+        case OT_TABLE:
+        case OT_USERDATA:
+        case OT_INSTANCE:
+            switch(FallBackGet(self,key,dest)) {
+                case FALLBACK_OK: return true; //okie
+                case FALLBACK_NO_MATCH: break; //keep falling back
+                case FALLBACK_ERROR: return false; // the metamethod failed
+            }
+            break;
+        default:
+            break;
         }
         if(InvokeDefaultDelegate(self,key,dest)) {
             return true;
