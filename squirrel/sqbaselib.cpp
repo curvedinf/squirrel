@@ -857,11 +857,36 @@ static bool _hsort_sift_down(HSQUIRRELVM v,SQArray *arr, SQInteger root, SQInteg
     return true;
 }
 
+static bool _insertion_sort(HSQUIRRELVM v, SQArray *arr, const SQObjectPtr *func, SQInteger comparebase)
+{
+    SQInteger array_size = arr->Size();
+    for(SQInteger i = 1; i < array_size; i++) {
+        SQObjectPtr value = arr->_values[i];
+        SQInteger j = i - 1;
+        SQInteger ret;
+        while(j >= 0) {
+            if(!_sort_compare(v, arr, arr->_values[j], value, func, comparebase, ret)) {
+                return false;
+            }
+            if(ret <= 0) {
+                break;
+            }
+            arr->_values[j + 1] = arr->_values[j];
+            j--;
+        }
+        arr->_values[j + 1] = value;
+    }
+    return true;
+}
+
 static bool _hsort(HSQUIRRELVM v,SQObjectPtr &arr, SQInteger SQ_UNUSED_ARG(l), SQInteger SQ_UNUSED_ARG(r),const SQObjectPtr *func, SQInteger comparebase)
 {
     SQArray *a = _array(arr);
     SQInteger i;
     SQInteger array_size = a->Size();
+    if(array_size < 16) {
+        return _insertion_sort(v, a, func, comparebase);
+    }
     for (i = (array_size / 2) - 1; i >= 0; i--) {
         if(!_hsort_sift_down(v,a, i, array_size - 1,func,comparebase)) return false;
     }
