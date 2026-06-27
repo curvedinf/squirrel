@@ -641,7 +641,7 @@ SQString* SQStringTable::Concat(const SQChar* a, SQInteger alen, const SQChar* b
     SQString* s;
     SQInteger len = alen + blen;
     for (s = _strings[h]; s; s = s->_next) {
-        if (s->_len == len) {
+        if (s->_hash == newhash && s->_len == len) {
             if ((!memcmp(a, s->_val, sq_rsl(alen)))
                 && (!memcmp(b, &s->_val[alen], sq_rsl(blen)))) {
                 return s; //found
@@ -677,7 +677,7 @@ SQString *SQStringTable::Add(const SQChar *news,SQInteger len)
     SQHash h = newhash&(_numofslots-1);
     SQString *s;
     for (s = _strings[h]; s; s = s->_next){
-        if(s->_len == len && (!memcmp(news,s->_val,sq_rsl(len))))
+        if(s->_hash == newhash && s->_len == len && (!memcmp(news,s->_val,sq_rsl(len))))
             return s; //found
     }
 

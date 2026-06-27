@@ -26,15 +26,28 @@ taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benc
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
-| `registry_catalog` | `18.672` | `727105` |
-| `world_map_graph` | `52.394` | `325170` |
-| `inventory_flow` | `78.479` | `812233` |
+| `registry_catalog` | `19.302` | `727105` |
+| `world_map_graph` | `53.996` | `325170` |
+| `inventory_flow` | `79.207` | `812233` |
 
-This baseline came from retaining interned string-key specialized direct get paths for `table` / `class` / `instance` lookups and default delegates over the prior retained PGO+LTO head of `18.586 / 52.975 / 81.885 ms`. The clean retry was `18.471 / 53.055 / 78.777 ms` (`+2.048%` overall), and the confirmation run promoted here was `18.672 / 52.394 / 78.479 ms` (`+2.542%` overall).
+This baseline came from retaining a full-hash guard before `memcmp()` in `SQStringTable::Concat()` / `Add()` over a fresh pinned rerun of the prior retained PGO+LTO head of `18.994 / 54.189 / 80.237 ms`. The clean retry was `19.085 / 53.473 / 77.881 ms` (`+1.943%` overall), and the confirmation run promoted here was `19.302 / 53.996 / 79.207 ms` (`+0.596%` overall).
 
 ## Historical Reference Baselines
 
 ### Immediate Prior Refreshed Retained-Head Baseline
+
+Date: `2026-06-27`
+Build: `./build-pgo-lto/bin/sqbench`
+
+| Workload | run_avg_ms | checksum |
+| --- | ---: | ---: |
+| `registry_catalog` | `18.994` | `727105` |
+| `world_map_graph` | `54.189` | `325170` |
+| `inventory_flow` | `80.237` | `812233` |
+
+This was a fresh pinned rerun of the previously retained PGO+LTO head, taken to compare the full-hash-guard candidate in the current machine state before promotion.
+
+### Earlier Prior Retained-Head Baseline
 
 Date: `2026-06-27`
 Build: `./build-pgo-lto/bin/sqbench`
@@ -167,6 +180,7 @@ Some earlier runs were kept before this ledger existed. Where exact per-workload
 
 | Change | Baseline used | Result | Overall |
 | --- | --- | --- | ---: |
+| Full-hash guard before `memcmp()` in `SQStringTable::Concat()` / `Add()` | refreshed retained PGO+LTO head `18.994 / 54.189 / 80.237 ms` | clean retry: `19.085 / 53.473 / 77.881 ms` (`+1.943%`); confirmation promoted: `19.302 / 53.996 / 79.207 ms` | `+0.596%` |
 | Interned string-key specialized direct get paths for `table` / `class` / `instance` lookups and default delegates | retained PGO+LTO head `18.586 / 52.975 / 81.885 ms` | clean retry: `18.471 / 53.055 / 78.777 ms` (`+2.048%`); confirmation promoted: `18.672 / 52.394 / 78.479 ms` | `+2.542%` |
 | Reused comparator call-frame slots across `array.sort()` callback invocations | refreshed retained PGO+LTO head `18.720 / 55.296 / 82.709 ms` | clean retry: `18.754 / 52.903 / 82.111 ms` (`+1.887%`); confirmation promoted: `18.586 / 52.975 / 81.885 ms` | `+2.092%` |
 | `_OP_EXISTS` fast path | earlier retained source head | exact absolute timings not preserved in this ledger | `+1.761%` |
@@ -196,6 +210,14 @@ This older retained PGO snapshot predates the retained `-fno-semantic-interposit
 ## Rolled Back Results
 
 These candidates were benchmark-negative or otherwise not retained.
+
+### Re-evaluated against retained head `18.994 / 54.189 / 80.237 ms`
+
+These retries were run after refreshing the retained PGO+LTO baseline in the current machine state and before retaining the full-hash guard in `SQStringTable`.
+
+| Change | Frozen baseline | Retry results | Outcome |
+| --- | --- | --- | --- |
+| Same-value fast path in `SQObjectPtr` copy assignment | `18.994 / 54.189 / 80.237 ms` | clean retry: `19.778 / 54.656 / 83.040 ms` (`-2.642%` by total) | rolled back |
 
 ### Re-evaluated against retained head `18.586 / 52.975 / 81.885 ms`
 
