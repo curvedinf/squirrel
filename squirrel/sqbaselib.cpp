@@ -781,30 +781,22 @@ static SQInteger array_find(HSQUIRRELVM v)
 }
 
 
-static bool _sort_compare(HSQUIRRELVM v, SQArray *arr, SQObjectPtr &a,SQObjectPtr &b,const SQObjectPtr *func,SQInteger &ret)
+static bool _sort_compare(HSQUIRRELVM v, SQArray *arr, SQObjectPtr &a,SQObjectPtr &b,const SQObjectPtr *func,SQInteger comparebase,SQInteger &ret)
 {
     if(func == NULL) {
         if(!v->ObjCmp(a,b,ret)) return false;
     }
     else {
-        SQInteger top = sq_gettop(v);
         SQObjectPtr clo = *func;
-        v->Push(v->_roottable);
-        v->Push(a);
-        v->Push(b);
+        v->_stack._vals[comparebase + 1] = a;
+        v->_stack._vals[comparebase + 2] = b;
 		SQObjectPtr *valptr = arr->_values._vals;
 		SQUnsignedInteger precallsize = arr->_values.size();
         SQObjectPtr result;
-        if(!v->Call(clo, 3, v->_top - 3, result, SQFalse)) {
+        if(!v->Call(clo, 3, comparebase, result, SQFalse)) {
             if(!sq_isstring( v->_lasterror))
                 v->Raise_Error(_SC("compare func failed"));
-            if(!v->_suspended) {
-                sq_settop(v, top);
-            }
             return false;
-        }
-        if(!v->_suspended) {
-            sq_settop(v, top);
         }
 		if(sq_isnumeric(result)) {
             ret = tointeger(result);
@@ -825,7 +817,7 @@ static bool _sort_compare(HSQUIRRELVM v, SQArray *arr, SQObjectPtr &a,SQObjectPt
     return true;
 }
 
-static bool _hsort_sift_down(HSQUIRRELVM v,SQArray *arr, SQInteger root, SQInteger bottom, const SQObjectPtr *func)
+static bool _hsort_sift_down(HSQUIRRELVM v,SQArray *arr, SQInteger root, SQInteger bottom, const SQObjectPtr *func, SQInteger comparebase)
 {
     SQInteger maxChild;
     SQInteger done = 0;
@@ -837,7 +829,7 @@ static bool _hsort_sift_down(HSQUIRRELVM v,SQArray *arr, SQInteger root, SQInteg
             maxChild = root2;
         }
         else {
-            if(!_sort_compare(v,arr,arr->_values[root2],arr->_values[root2 + 1],func,ret))
+            if(!_sort_compare(v,arr,arr->_values[root2],arr->_values[root2 + 1],func,comparebase,ret))
                 return false;
             if (ret > 0) {
                 maxChild = root2;
@@ -847,7 +839,7 @@ static bool _hsort_sift_down(HSQUIRRELVM v,SQArray *arr, SQInteger root, SQInteg
             }
         }
 
-        if(!_sort_compare(v,arr,arr->_values[root],arr->_values[maxChild],func,ret))
+        if(!_sort_compare(v,arr,arr->_values[root],arr->_values[maxChild],func,comparebase,ret))
             return false;
         if (ret < 0) {
             if (root == maxChild) {
@@ -865,19 +857,19 @@ static bool _hsort_sift_down(HSQUIRRELVM v,SQArray *arr, SQInteger root, SQInteg
     return true;
 }
 
-static bool _hsort(HSQUIRRELVM v,SQObjectPtr &arr, SQInteger SQ_UNUSED_ARG(l), SQInteger SQ_UNUSED_ARG(r),const SQObjectPtr *func)
+static bool _hsort(HSQUIRRELVM v,SQObjectPtr &arr, SQInteger SQ_UNUSED_ARG(l), SQInteger SQ_UNUSED_ARG(r),const SQObjectPtr *func, SQInteger comparebase)
 {
     SQArray *a = _array(arr);
     SQInteger i;
     SQInteger array_size = a->Size();
     for (i = (array_size / 2) - 1; i >= 0; i--) {
-        if(!_hsort_sift_down(v,a, i, array_size - 1,func)) return false;
+        if(!_hsort_sift_down(v,a, i, array_size - 1,func,comparebase)) return false;
     }
 
     for (i = array_size-1; i >= 1; i--)
     {
         _Swap(a->_values[0],a->_values[i]);
-        if(!_hsort_sift_down(v,a, 0, i-1,func)) return false;
+        if(!_hsort_sift_down(v,a, 0, i-1,func,comparebase)) return false;
     }
     return true;
 }
@@ -886,13 +878,18 @@ static SQInteger array_sort(HSQUIRRELVM v)
 {
     SQObjectPtr funcobj;
     const SQObjectPtr *func = NULL;
+    SQInteger comparebase = -1;
     SQObjectPtr &o = stack_get(v,1);
     if(_array(o)->Size() > 1) {
         if(sq_gettop(v) == 2) {
             funcobj = stack_get(v,2);
             func = &funcobj;
+            comparebase = v->_top;
+            v->Push(v->_roottable);
+            v->PushNull();
+            v->PushNull();
         }
-        if(!_hsort(v, o, 0, _array(o)->Size()-1, func))
+        if(!_hsort(v, o, 0, _array(o)->Size()-1, func, comparebase))
             return SQ_ERROR;
 
     }

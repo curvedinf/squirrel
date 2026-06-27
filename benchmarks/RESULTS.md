@@ -13,7 +13,7 @@ Policy:
 
 Use this for the next candidate unless a newer retained result is promoted.
 
-Date: `2026-06-18`
+Date: `2026-06-27`
 Build: `./build-pgo-lto/bin/sqbench`
 CPU pinning: `taskset -c 0`
 Command set:
@@ -26,15 +26,41 @@ taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benc
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
+| `registry_catalog` | `18.586` | `727105` |
+| `world_map_graph` | `52.975` | `325170` |
+| `inventory_flow` | `81.885` | `812233` |
+
+This baseline came from retaining reusable comparator call-frame slots in `array.sort()` on top of a refreshed same-build measurement of the prior retained PGO+LTO head of `18.720 / 55.296 / 82.709 ms`, which was a `+2.092%` overall improvement.
+
+## Historical Reference Baselines
+
+### Immediate Prior Refreshed Retained-Head Baseline
+
+Date: `2026-06-27`
+Build: `./build-pgo-lto/bin/sqbench`
+
+| Workload | run_avg_ms | checksum |
+| --- | ---: | ---: |
+| `registry_catalog` | `18.720` | `727105` |
+| `world_map_graph` | `55.296` | `325170` |
+| `inventory_flow` | `82.709` | `812233` |
+
+This was a fresh pinned rerun of the previously retained PGO+LTO head, taken to compare the next source-level candidate in the current machine state before promotion.
+
+### Immediate Prior Retained-Head Baseline
+
+Date: `2026-06-18`
+Build: `./build-pgo-lto/bin/sqbench`
+
+| Workload | run_avg_ms | checksum |
+| --- | ---: | ---: |
 | `registry_catalog` | `19.681` | `727105` |
 | `world_map_graph` | `52.719` | `325170` |
 | `inventory_flow` | `78.413` | `812233` |
 
-This baseline came from retaining a fresh PGO+LTO build on top of the retained PGO `-fno-semantic-interposition` head of `19.214 / 54.951 / 80.224 ms`, which was a `+2.316%` overall improvement.
+This was the previously retained PGO+LTO head. It later became the source head that was refreshed on `2026-06-27` for the next retained comparison.
 
-## Historical Reference Baselines
-
-### Immediate Prior Retained-Head Baseline
+### Earlier Prior Retained-Head Baseline
 
 Date: `2026-06-18`
 Build: `./build-pgo-retained/bin/sqbench`
@@ -47,7 +73,7 @@ Build: `./build-pgo-retained/bin/sqbench`
 
 This was the retained fresh pinned PGO build. It became the frozen comparison target for the PGO+LTO re-evaluation.
 
-### Earlier Prior Retained-Head Baseline
+### Earlier Prior Source Retained-Head Baseline
 
 Date: `2026-06-18`
 Build: `./build/bin/sqbench`
@@ -128,6 +154,7 @@ Some earlier runs were kept before this ledger existed. Where exact per-workload
 
 | Change | Baseline used | Result | Overall |
 | --- | --- | --- | ---: |
+| Reused comparator call-frame slots across `array.sort()` callback invocations | refreshed retained PGO+LTO head `18.720 / 55.296 / 82.709 ms` | clean retry: `18.754 / 52.903 / 82.111 ms` (`+1.887%`); confirmation promoted: `18.586 / 52.975 / 81.885 ms` | `+2.092%` |
 | `_OP_EXISTS` fast path | earlier retained source head | exact absolute timings not preserved in this ledger | `+1.761%` |
 | `array.sort` comparator-call rewrite | earlier retained source / PGO heads | exact absolute timings not preserved in this ledger | `+2.834%` source, `+0.304%` PGO |
 | `array.sort` zero-based heap fix | earlier retained source / PGO heads | exact absolute timings not preserved in this ledger | `+7.185%` source, `+6.566%` PGO |
