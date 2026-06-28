@@ -1090,12 +1090,16 @@ exception_restore:
                 }
                               }
             case _OP_CALL: {
-                    SQObjectPtr clo = STK(arg1);
-                    switch (sq_type(clo)) {
+                    switch (sq_type(STK(arg1))) {
                     case OT_CLOSURE:
-                        _GUARD(StartCall(_closure(clo), sarg0, arg3, _stackbase+arg2, false));
+                        // Most common shape (direct call of a Squirrel closure, e.g. a global
+                        // helper). Only the callee pointer is needed; avoid the defensive
+                        // SQObjectPtr copy of the stack slot here. STK(arg1) is stable until
+                        // StartCall() runs, and the pointer it yields does not move on resize.
+                        _GUARD(StartCall(_closure(STK(arg1)), sarg0, arg3, _stackbase+arg2, false));
                         continue;
                     case OT_NATIVECLOSURE: {
+                        SQObjectPtr clo = STK(arg1);
                         bool suspend;
 						bool tailcall;
                         _GUARD(CallNative(_nativeclosure(clo), arg3, _stackbase+arg2, clo, (SQInt32)sarg0, suspend, tailcall));
@@ -1113,6 +1117,7 @@ exception_restore:
                                            }
                         continue;
                     case OT_CLASS:{
+                        SQObjectPtr clo = STK(arg1);
                         SQObjectPtr inst;
                         _GUARD(CreateClassInstance(_class(clo),inst,clo));
                         if(sarg0 != -1) {
@@ -1138,6 +1143,7 @@ exception_restore:
                     case OT_TABLE:
                     case OT_USERDATA:
                     case OT_INSTANCE:{
+                        SQObjectPtr clo = STK(arg1);
                         SQObjectPtr closure;
                         if(_delegable(clo)->_delegate && _delegable(clo)->GetMetaMethod(this,MT_CALL,closure)) {
                             Push(clo);
@@ -1153,7 +1159,7 @@ exception_restore:
                         //SQ_THROW();
                       }
                     default:
-                        Raise_Error(_SC("attempt to call '%s'"), GetTypeName(clo));
+                        Raise_Error(_SC("attempt to call '%s'"), GetTypeName(STK(arg1)));
                         SQ_THROW();
                     }
                 }
