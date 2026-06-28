@@ -10,6 +10,9 @@ cmake --build build -j
 ./build/bin/sqbench --compile-repeat 5 --run-repeat 25 benchmarks/workloads/registry_catalog.nut
 ./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/world_map_graph.nut 24 18 12
 ./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/inventory_flow.nut 3000 11
+./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/session_context_flow.nut 600 12
+./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/scenario_tick_flow.nut 3200 24 14
+./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/volume_presence_scan.nut 600 6 12 6
 ```
 
 Profile-guided optimization is supported for GCC builds through `SQ_PGO_MODE`.
@@ -22,6 +25,9 @@ Additional CMake arguments can be passed after the build directory when a retain
 ./build-pgo/bin/sqbench --compile-repeat 3 --run-repeat 20 benchmarks/workloads/registry_catalog.nut 180
 ./build-pgo/bin/sqbench --compile-repeat 3 --run-repeat 20 benchmarks/workloads/world_map_graph.nut 30 18 12
 ./build-pgo/bin/sqbench --compile-repeat 3 --run-repeat 20 benchmarks/workloads/inventory_flow.nut 3200 11
+./build-pgo/bin/sqbench --compile-repeat 3 --run-repeat 20 benchmarks/workloads/session_context_flow.nut 600 12
+./build-pgo/bin/sqbench --compile-repeat 3 --run-repeat 20 benchmarks/workloads/scenario_tick_flow.nut 3200 24 14
+./build-pgo/bin/sqbench --compile-repeat 3 --run-repeat 20 benchmarks/workloads/volume_presence_scan.nut 600 6 12 6
 ```
 
 Workloads:
@@ -35,6 +41,15 @@ Workloads:
 - `workloads/inventory_flow.nut`
   Inspired by `../inferno-code/scripts/shared/campaign/inventory_state/**/*.nut`.
   Stresses repeated table mutation, token normalization, transfers, sorting, and reward-application logic.
+- `workloads/session_context_flow.nut`
+  Inspired by delving-mode session/context helpers in `../inferno-code/scripts/runtime/modes/delving_mode/**`.
+  Stresses repeated shared-text lookup, prefix slicing, lowercasing, route/package checks, and generated-report projection.
+- `workloads/scenario_tick_flow.nut`
+  Inspired by `../inferno-code/scripts/runtime/modes/delving_mode.nut` and `gameplay_and_outcome/scenario_flow.nut`.
+  Stresses tick-time context refresh, route-state selection, state initialization, respawn loops, and mission/runtime gating.
+- `workloads/volume_presence_scan.nut`
+  Inspired by `../inferno-code/scripts/runtime/modes/delving_mode/spatial_and_loot/volume_and_context.nut`.
+  Stresses tagged-volume scans, repeated position coercion, player/volume nested iteration, and generated-layer fallback checks.
 
 The benchmark scripts are intentionally generic so VM and compiler changes can be measured in `squirrel` directly before reintegrating results into `inferno-code`.
 
