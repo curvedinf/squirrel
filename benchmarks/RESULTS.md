@@ -14,31 +14,31 @@ Policy:
 Use this for the next candidate unless a newer retained result is promoted.
 
 Date: `2026-06-28`
-Build: `./build-pgo-lto-caseascii/bin/sqbench`
+Build: `./build-pgo-lto-fastdefaultget/bin/sqbench`
 CPU pinning: `taskset -c 2`
 Command set:
 
 ```bash
-taskset -c 2 ./build-pgo-lto-caseascii/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/registry_catalog.nut 500
-taskset -c 2 ./build-pgo-lto-caseascii/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/world_map_graph.nut 30 18 12
-taskset -c 2 ./build-pgo-lto-caseascii/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/inventory_flow.nut 2200 11
-taskset -c 2 ./build-pgo-lto-caseascii/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/session_context_flow.nut 450 12
-taskset -c 2 ./build-pgo-lto-caseascii/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/scenario_tick_flow.nut 10200 24 14
-taskset -c 2 ./build-pgo-lto-caseascii/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/volume_presence_scan.nut 650 6 12 6
+taskset -c 2 ./build-pgo-lto-fastdefaultget/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/registry_catalog.nut 500
+taskset -c 2 ./build-pgo-lto-fastdefaultget/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/world_map_graph.nut 30 18 12
+taskset -c 2 ./build-pgo-lto-fastdefaultget/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/inventory_flow.nut 2200 11
+taskset -c 2 ./build-pgo-lto-fastdefaultget/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/session_context_flow.nut 450 12
+taskset -c 2 ./build-pgo-lto-fastdefaultget/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/scenario_tick_flow.nut 10200 24 14
+taskset -c 2 ./build-pgo-lto-fastdefaultget/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/volume_presence_scan.nut 650 6 12 6
 ```
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
-| `registry_catalog` | `45.918` | `2019808` |
-| `world_map_graph` | `47.546` | `325170` |
-| `inventory_flow` | `45.501` | `580946` |
-| `session_context_flow` | `43.005` | `593415` |
-| `scenario_tick_flow` | `47.852` | `2030324` |
-| `volume_presence_scan` | `48.407` | `308206` |
+| `registry_catalog` | `45.002` | `2019808` |
+| `world_map_graph` | `47.863` | `325170` |
+| `inventory_flow` | `45.497` | `580946` |
+| `session_context_flow` | `40.739` | `593415` |
+| `scenario_tick_flow` | `46.833` | `2030324` |
+| `volume_presence_scan` | `47.990` | `308206` |
 
-This retained head keeps the one-entry shared-state `string.slice` result cache, the `_OP_PREPCALLK` one-argument default-delegate natclosure fast path, the short-circuit `||` / `&&` move-retargeting reduction, and now short-circuits ASCII `tolower()` / `toupper()` requests by returning unchanged ASCII bytes directly instead of routing already-correct lowercase, uppercase, digits, and punctuation through libc case conversion while leaving non-ASCII handling unchanged. After a clean custom case-mapping probe plus identical `samples/class.nut` and `samples/generators.nut` output on both the source and PGO interpreters, six-workload source checksum smoke in both orders (`360.442 ms` versus `362.767 ms`, then `357.373 ms` versus `363.812 ms`), fresh PGO+LTO retraining, and two clean pinned long-suite control pairs against the previous retained build (`278.229 ms` versus `278.584 ms`, then `278.117 ms` versus `279.761 ms`), the authoritative six-workload retained baseline is `278.229 ms` total. This promoted retained head is `3.118 ms` (`+1.108%`) faster than the previous authoritative retained baseline of `281.347 ms`. Earlier baseline sections below are preserved for history.
+This retained head keeps the one-entry shared-state `string.slice` result cache, the `_OP_PREPCALLK` one-argument default-delegate natclosure fast path, the short-circuit `||` / `&&` move-retargeting reduction, the unchanged-ASCII `tolower()` / `toupper()` fast path, and now hoists the cached default-delegate method lookup (`len`, `tointeger`, `tofloat`, `tostring`) into `SQVM::Get()` so generic member lookup can satisfy those hot built-in helpers before paying the slower `InvokeDefaultDelegate()` path. After a clean custom default-delegate probe plus identical `samples/class.nut` and `samples/generators.nut` output on both the source and PGO interpreters, six-workload source checksum smoke in both orders (`344.746 ms` versus `364.595 ms`, then `351.061 ms` versus `351.929 ms`, plus tie-break `346.311 ms` versus `366.828 ms`), fresh PGO+LTO retraining, and two clean pinned long-suite pairs against the previous retained build (`273.924 ms` versus `278.036 ms`, then `273.625 ms` versus `278.657 ms`), the authoritative six-workload retained baseline is `273.924 ms` total. This promoted retained head is `4.305 ms` (`+1.547%`) faster than the previous authoritative retained baseline of `278.229 ms`. Earlier baseline sections below are preserved for history.
 
-### Rejected on immediate prior retained head `281.347 ms`
+### Rejected on earlier prior retained head `281.347 ms`
 
 | Change | Frozen baseline | Retry results | Outcome |
 | --- | --- | --- | --- |
@@ -52,6 +52,12 @@ This retained head keeps the one-entry shared-state `string.slice` result cache,
 | Fuse the exact `EXISTS -> JZ -> same-key GET/GETK` interpreter sequence so successful presence checks reuse the already-resolved direct value instead of probing again | targeted present/missing/null probe stayed output-identical for literal-key, dynamic-key, array-index, and string-index cases | rejected during source smoke before a pinned PGO retry: first full-suite source pass regressed from control `58.131 / 60.348 / 58.835 / 60.214 / 64.316 / 71.394 ms` (`373.238 ms` total) to candidate `63.426 / 64.312 / 64.614 / 59.869 / 64.634 / 67.012 ms` (`383.867 ms`, `-2.848%`), and reverse-order confirmation lost more sharply at candidate `66.552 / 65.061 / 64.163 / 60.253 / 63.174 / 67.453 ms` (`386.656 ms`) versus reverse control `60.676 / 60.881 / 59.630 / 55.782 / 59.434 / 62.563 ms` (`358.966 ms`, `-7.714%`) | rolled back |
 | Inline the hot direct container-lookup helpers and specialize known-string `_OP_GETK` / `_OP_PREPCALLK` literal-key probes before the generic fallback path | all six source checksums still matched in both orders | rejected during source smoke before a pinned PGO retry: first full-suite source pass regressed from control `58.270 / 64.317 / 58.644 / 57.106 / 59.528 / 62.518 ms` (`360.383 ms` total) to candidate `65.801 / 64.319 / 63.969 / 59.599 / 63.219 / 66.078 ms` (`382.985 ms`, `-6.272%`), and reverse-order confirmation also lost at candidate `63.154 / 63.710 / 64.060 / 58.367 / 62.291 / 67.253 ms` (`378.835 ms`) versus reverse control `58.893 / 60.011 / 59.036 / 56.096 / 58.773 / 62.858 ms` (`355.667 ms`, `-6.514%`) | rolled back |
 | Extend the cached `_OP_PREPCALLK` default-delegate natclosure fast path to try successful multi-arg intrinsics through `TryFastCallNative()` before falling back to generic `CallNative()` setup | direct `slice(start,end)`, `tointeger(base)`, and `tofloat()` probe stayed output-identical; all six source checksums still matched | rejected during source smoke before a pinned PGO retry: first full-suite source pass regressed from control `62.337 / 58.760 / 58.749 / 56.064 / 59.436 / 71.508 ms` (`366.854 ms` total) to candidate `62.124 / 62.336 / 61.933 / 58.389 / 63.327 / 65.729 ms` (`373.838 ms`, `-1.903%`), and reverse-order confirmation lost more sharply at candidate `62.570 / 61.561 / 61.920 / 59.600 / 62.361 / 65.487 ms` (`373.499 ms`) versus reverse control `58.547 / 59.870 / 57.414 / 56.032 / 59.275 / 62.055 ms` (`353.193 ms`, `-5.750%`) | rolled back |
+
+### Rejected on immediate prior retained head `278.229 ms`
+
+| Change | Frozen baseline | Retry results | Outcome |
+| --- | --- | --- | --- |
+| Scan `string_case_map()` for the first real `tolower()` / `toupper()` change and return the original string immediately on unchanged paths, only allocating and copying once a mapped character actually differs | clean custom case probe plus `samples/class.nut` and `samples/generators.nut` stayed output-identical against the retained source interpreter | not stable enough to justify a PGO retry: first full-suite source pass regressed from control `59.408 / 61.734 / 59.684 / 53.672 / 58.765 / 63.398 ms` (`356.661 ms` total) to candidate `66.648 / 59.052 / 58.104 / 59.673 / 58.779 / 65.012 ms` (`367.268 ms`, `-2.973%`), while reverse-order confirmation flipped the other way at candidate `59.049 / 61.032 / 59.289 / 53.489 / 58.934 / 63.278 ms` (`355.071 ms`) versus reverse control `59.508 / 61.063 / 65.833 / 54.605 / 57.997 / 63.176 ms` (`362.182 ms`, `+1.964%`) | rolled back; source results were too order-sensitive to justify PGO |
 
 ### Rejected on immediate prior retained head `284.700 ms`
 
@@ -108,6 +114,22 @@ These retries were run directly against the previous six-workload retained head 
 ## Historical Reference Baselines
 
 ### Immediate Prior Six-Workload Retained-Head Baseline
+
+Date: `2026-06-28`
+Build: `./build-pgo-lto-caseascii/bin/sqbench`
+
+| Workload | run_avg_ms | checksum |
+| --- | ---: | ---: |
+| `registry_catalog` | `45.918` | `2019808` |
+| `world_map_graph` | `47.546` | `325170` |
+| `inventory_flow` | `45.501` | `580946` |
+| `session_context_flow` | `43.005` | `593415` |
+| `scenario_tick_flow` | `47.852` | `2030324` |
+| `volume_presence_scan` | `48.407` | `308206` |
+
+This was the retained head before the cached default-delegate lookup-in-`Get()` promotion. Its authoritative six-workload total was `278.229 ms`.
+
+### Earlier Prior Six-Workload Retained-Head Baseline
 
 Date: `2026-06-28`
 Build: `./build-pgo-lto-logicmove/bin/sqbench`

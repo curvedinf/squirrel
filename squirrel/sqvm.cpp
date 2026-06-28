@@ -79,6 +79,20 @@ static SQInteger FastDelegateKeyForCall(SQSharedState *ss, const SQObjectPtr &ke
     return -1;
 }
 
+static bool TryFastDefaultDelegateLookup(SQSharedState *ss, const SQObjectPtr &self, const SQObjectPtr &key, SQObjectPtr &dest, bool include_tables)
+{
+    SQInteger fasttype = FastDelegateTypeForCall(self, include_tables);
+    SQInteger fastkey = FastDelegateKeyForCall(ss, key);
+    if(fasttype != -1 && fastkey != -1) {
+        SQObjectPtr &cached = ss->_fast_delegate_methods[fasttype][fastkey];
+        if(sq_type(cached) != OT_NULL) {
+            dest = cached;
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool TryDirectContainerGetStr(const SQObjectPtr &self, const SQString *key, SQObjectPtr &dest)
 {
     switch(sq_type(self)) {
@@ -1747,7 +1761,7 @@ bool SQVM::Get(const SQObjectPtr &self, const SQObjectPtr &key, SQObjectPtr &des
         default:
             break;
         }
-        if(InvokeDefaultDelegate(self,key,dest)) {
+        if(TryFastDefaultDelegateLookup(_sharedstate, self, key, dest, true) || InvokeDefaultDelegate(self,key,dest)) {
             return true;
         }
     }
@@ -1767,16 +1781,6 @@ bool SQVM::Get(const SQObjectPtr &self, const SQObjectPtr &key, SQObjectPtr &des
 
 bool SQVM::InvokeDefaultDelegate(const SQObjectPtr &self,const SQObjectPtr &key,SQObjectPtr &dest)
 {
-    SQInteger fasttype = FastDelegateTypeForCall(self, true);
-    SQInteger fastkey = FastDelegateKeyForCall(_sharedstate, key);
-    if(fasttype != -1 && fastkey != -1) {
-        SQObjectPtr &cached = _sharedstate->_fast_delegate_methods[fasttype][fastkey];
-        if(sq_type(cached) != OT_NULL) {
-            dest = cached;
-            return true;
-        }
-    }
-
     SQTable *ddel = NULL;
     switch(sq_type(self)) {
         case OT_CLASS: ddel = _class_ddel; break;
