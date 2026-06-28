@@ -14,18 +14,50 @@ Policy:
 Use this for the next candidate unless a newer retained result is promoted.
 
 Date: `2026-06-28`
-Build: `./build-pgo-lto/bin/sqbench`
+Build: `./build-pgo-lto-slicecache/bin/sqbench`
 CPU pinning: `taskset -c 2`
 Command set:
 
 ```bash
-taskset -c 2 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/registry_catalog.nut 500
-taskset -c 2 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/world_map_graph.nut 30 18 12
-taskset -c 2 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/inventory_flow.nut 2200 11
-taskset -c 2 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/session_context_flow.nut 450 12
-taskset -c 2 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/scenario_tick_flow.nut 10200 24 14
-taskset -c 2 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/volume_presence_scan.nut 650 6 12 6
+taskset -c 2 ./build-pgo-lto-slicecache/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/registry_catalog.nut 500
+taskset -c 2 ./build-pgo-lto-slicecache/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/world_map_graph.nut 30 18 12
+taskset -c 2 ./build-pgo-lto-slicecache/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/inventory_flow.nut 2200 11
+taskset -c 2 ./build-pgo-lto-slicecache/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/session_context_flow.nut 450 12
+taskset -c 2 ./build-pgo-lto-slicecache/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/scenario_tick_flow.nut 10200 24 14
+taskset -c 2 ./build-pgo-lto-slicecache/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/volume_presence_scan.nut 650 6 12 6
 ```
+
+| Workload | run_avg_ms | checksum |
+| --- | ---: | ---: |
+| `registry_catalog` | `46.027` | `2019808` |
+| `world_map_graph` | `49.385` | `325170` |
+| `inventory_flow` | `46.108` | `580946` |
+| `session_context_flow` | `44.464` | `593415` |
+| `scenario_tick_flow` | `49.960` | `2030324` |
+| `volume_presence_scan` | `50.150` | `308206` |
+
+This retained head adds a one-entry shared-state `string.slice` result cache keyed by the source string plus normalized start/length. After six-workload source checksum smoke, direct plus compiled-bytecode slice probes, stock `samples/class.nut` and `samples/generators.nut` interpreter runs, fresh PGO+LTO retraining, and two clean sequential quiet-core control pairs against the prior retained worktree, the authoritative six-workload retained baseline is `286.094 ms` total. Two later canonical `./build-pgo-lto/bin/sqbench` refresh attempts on the same source were host-noisy and were discarded in favor of the clean reverse-order confirmation above. Earlier baseline sections below are preserved for history.
+
+### Rejected on immediate prior retained head `287.615 ms`
+
+These retries were run directly against the previous six-workload retained head before the slice-cache promotion.
+
+| Change | Frozen baseline | Retry results | Outcome |
+| --- | --- | --- | --- |
+| Early intrinsic fast path in `CallNative()` before the generic type-mask walk for `len`, `tofloat`, `tostring`, numeric-base `tointeger`, and `string.slice` | live retained control `46.327 / 49.320 / 46.497 / 44.461 / 49.899 / 51.148 ms` | clean pinned full-suite retry: candidate `49.158 / 49.742 / 46.740 / 45.011 / 52.060 / 51.540 ms` (`294.251 ms` total versus `287.652 ms`, `-2.295%`) | rolled back |
+| Remove `TryFastCallNative()`'s unused `suspend` / `tailcall` out-parameters and zero them once in `CallNative()` | live retained control `47.112 / 49.313 / 46.324 / 44.417 / 49.826 / 50.664 ms` | clean pinned full-suite retry: candidate `48.213 / 53.631 / 47.429 / 44.525 / 50.505 / 50.453 ms` (`294.756 ms` total versus `287.656 ms`, `-2.468%`) | rolled back |
+| Interned-string `ExistsStr()` follow-up for `_OP_EXISTS` table/class/instance paths | first live control `46.014 / 49.844 / 46.157 / 44.713 / 51.576 / 51.452 ms`, confirmation live control `46.917 / 48.923 / 46.352 / 46.005 / 49.748 / 50.598 ms` | first pinned full-suite retry lost at `46.816 / 49.646 / 45.886 / 46.045 / 50.266 / 52.373 ms` (`291.032 ms` versus `289.756 ms`, `-0.440%`); reverse-order confirmation edged ahead at `46.279 / 49.392 / 46.413 / 45.578 / 50.399 / 50.324 ms` (`288.385 ms` versus `288.543 ms`, `+0.055%`) | rolled back; not stable enough to promote |
+| `_OP_EXISTSK` compiler rewrite that removed literal-string key loads before `in` checks | live retained control `46.120 / 49.403 / 46.538 / 44.522 / 50.072 / 51.025 ms` | clean pinned full-suite retry: candidate `49.245 / 58.097 / 47.416 / 46.120 / 49.820 / 49.840 ms` (`300.538 ms` total versus `287.680 ms`, `-4.471%`) | rolled back |
+| `_OP_EXISTSK` peephole rewrite that preserved the original codegen shape and only changed the emitted opcode | live retained control `46.943 / 48.857 / 47.748 / 44.620 / 50.208 / 50.361 ms` | clean pinned full-suite retry: candidate `47.847 / 50.122 / 48.252 / 45.417 / 51.585 / 53.127 ms` (`296.350 ms` total versus `288.737 ms`, `-2.637%`) | rolled back |
+| Versioned monomorphic cache for repeated default-delegate string lookups on hot built-in types, with invalidation on default-delegate mutation and `_OP_PREPCALLK` native fast-call reuse | live retained control `47.008 / 49.096 / 46.344 / 44.887 / 49.830 / 50.433 ms` | clean pinned full-suite retry: candidate `47.226 / 51.075 / 47.526 / 45.527 / 51.198 / 50.725 ms` (`293.277 ms` total versus `287.598 ms`, `-1.974%`) | rolled back |
+| Per-table last-hit cache for `SQTable::GetStr()`, clearing on every mutation and rehash so repeated string-key lookups can bypass the bucket walk | live retained control `45.887 / 49.139 / 46.425 / 44.925 / 50.512 / 50.642 ms` | clean pinned full-suite retry: candidate `47.808 / 51.151 / 47.033 / 45.074 / 51.945 / 51.621 ms` (`294.632 ms` total versus `287.530 ms`, `-2.470%`) | rolled back |
+
+## Historical Reference Baselines
+
+### Immediate Prior Six-Workload Retained-Head Baseline
+
+Date: `2026-06-28`
+Build: `./build-pgo-lto/bin/sqbench`
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
@@ -36,11 +68,9 @@ taskset -c 2 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benc
 | `scenario_tick_flow` | `50.074` | `2030324` |
 | `volume_presence_scan` | `50.871` | `308206` |
 
-This retained head adds ASCII-fast `string.tolower()` / `string.toupper()` mapping, unchanged-slice result reuse, and a prehashed `SQStringTable::AddWithHash()` path so changed case-map results do not recompute their interned-string hash on insertion. After six-workload source checksum smoke, direct plus compiled-bytecode string-case probes, two stock `samples/` interpreter runs, fresh PGO retraining, two clean sequential quiet-core control pairs against the prior retained worktree, and a final canonical `./build-pgo-lto/bin/sqbench` refresh, the authoritative six-workload retained baseline is `287.615 ms` total. Earlier baseline sections below are preserved for history.
+This was the retained head before the shared-state `string.slice` result cache was promoted. Its authoritative six-workload total was `287.615 ms`.
 
-## Historical Reference Baselines
-
-### Immediate Prior Six-Workload Retained-Head Baseline
+### Earlier Prior Six-Workload Retained-Head Baseline
 
 Date: `2026-06-28`
 Build: `./build-pgo-lto/bin/sqbench`
@@ -283,6 +313,7 @@ Some earlier runs were kept before this ledger existed. Where exact per-workload
 
 | Change | Baseline used | Result | Overall |
 | --- | --- | --- | ---: |
+| One-entry shared-state `string.slice` result cache keyed by source string plus normalized start/length | retained PGO+LTO head `46.535 / 49.361 / 46.037 / 44.737 / 50.074 / 50.871 ms` | six-workload source checksum smoke, direct plus compiled-bytecode slice probes, `samples/class.nut`, `samples/generators.nut`, fresh PGO+LTO retraining, clean pinned full-suite retry `47.226 / 51.075 / 47.526 / 45.527 / 51.198 / 50.725 ms` versus live control `47.008 / 49.096 / 46.344 / 44.887 / 49.830 / 50.433 ms` (`+0.102%` by total), and reverse-order confirmation promoted `46.027 / 49.385 / 46.108 / 44.464 / 49.960 / 50.150 ms` versus live control `47.060 / 49.232 / 46.195 / 44.512 / 50.063 / 50.662 ms`; later canonical `./build-pgo-lto/bin/sqbench` refreshes on the same source were discarded as host-noisy | `+0.529%` |
 | ASCII-fast `string.tolower()` / `string.toupper()` mapping with unchanged-slice reuse and prehashed string-table insertion | retained PGO+LTO head `47.387 / 50.392 / 47.367 / 47.711 / 52.132 / 51.213 ms` | clean retry after fresh PGO+LTO retrains: candidate `46.364 / 49.291 / 46.102 / 45.178 / 50.649 / 52.950 ms` versus live control `47.293 / 50.745 / 48.385 / 47.481 / 51.674 / 50.882 ms` (`+1.998%` by total); reverse-order confirmation stayed ahead at `47.256 / 49.563 / 46.086 / 44.357 / 50.463 / 53.384 ms` versus live control `47.886 / 50.933 / 49.038 / 47.770 / 51.898 / 51.205 ms` (`+2.551%` by total); the final canonical `./build-pgo-lto/bin/sqbench` refresh settled at `46.535 / 49.361 / 46.037 / 44.737 / 50.074 / 50.871 ms` | `+2.899%` |
 | Bounded thread-local small-block cache under `sq_vm_malloc()` / `sq_vm_realloc()` / `sq_vm_free()` | retained PGO+LTO head `50.345 / 53.326 / 50.398 / 48.564 / 52.663 / 51.472 ms` | six-workload checksum smoke, `samples/class.nut`, `samples/generators.nut`, fresh PGO+LTO retraining, and two clean sequential quiet-core control pairs promoted `47.387 / 50.392 / 47.367 / 47.711 / 52.132 / 51.213 ms` | `+3.444%` |
 | `_OP_CAT3` peephole for three-part string-concat chains when the first binary `+` is provably string-producing | retained PGO+LTO head `17.984 / 52.483 / 74.219 ms` | clean retry: `18.307 / 51.626 / 73.828 ms` (`+0.639%` by total); confirmation promoted: `18.466 / 51.954 / 73.821 ms` | `+0.308%` |
@@ -321,6 +352,15 @@ This older retained PGO snapshot predates the retained `-fno-semantic-interposit
 ## Rolled Back Results
 
 These candidates were benchmark-negative or otherwise not retained.
+
+### Re-evaluated against retained six-workload head `46.535 / 49.361 / 46.037 / 44.737 / 50.074 / 50.871 ms`
+
+These retries were run after retaining the ASCII-fast string-case/interner change.
+
+| Change | Frozen baseline | Retry results | Outcome |
+| --- | --- | --- | --- |
+| Wider fast-delegate cache for `array.push` / `array.append` / `*.slice` / `string.tolower()` | `46.535 / 49.361 / 46.037 / 44.737 / 50.074 / 50.871 ms` | six-workload source smoke kept checksums clean, and direct plus compiled-bytecode delegate probes still matched for `push`, `append`, `slice`, `tolower`, `tointeger`, and `tofloat`. The live retained control measured `46.263 / 49.360 / 47.339 / 44.671 / 50.500 / 50.928 ms`, while the candidate measured `48.784 / 50.937 / 46.752 / 43.200 / 50.569 / 52.227 ms` (`-1.180%` by total) | rolled back |
+| Identical-value fast paths in `SQObjectPtr` copy assignment and ref-type pointer assignment | `46.535 / 49.361 / 46.037 / 44.737 / 50.074 / 50.871 ms` | six-workload source smoke kept checksums clean, but the pinned PGO+LTO candidate landed at `50.266 / 52.191 / 48.468 / 45.555 / 52.649 / 53.834 ms`, well behind the live retained control total of `289.061 ms` (`-4.810%` by total) | rolled back |
 
 ### Re-evaluated against retained six-workload head `50.345 / 53.326 / 50.398 / 48.564 / 52.663 / 51.472 ms`
 

@@ -126,6 +126,10 @@ public:
     static const SQRegFunction _weakref_default_delegate_funcz[];
     SQObjectPtr _fast_delegate_keys[FDK_COUNT];
     SQObjectPtr _fast_delegate_methods[FDT_COUNT][FDK_COUNT];
+    SQObjectPtr _cached_slice_source;
+    SQObjectPtr _cached_slice_result;
+    SQInteger _cached_slice_start;
+    SQInteger _cached_slice_len;
     SQObjectPtr _cached_tostring_true;
     SQObjectPtr _cached_tostring_false;
     SQObjectPtr _cached_tostring_null;

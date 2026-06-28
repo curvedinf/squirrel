@@ -807,7 +807,18 @@ SQInteger SQVM::TryFastCallNative(SQNativeClosure *nclosure, SQInteger nargs, SQ
                 Raise_Error(_SC("slice out of range"));
                 return -1;
             }
-            retval = SQString::Create(_ss(this), &_stringval(self)[sidx], eidx - sidx);
+            SQInteger slice_len = eidx - sidx;
+            if(_rawval(_sharedstate->_cached_slice_source) == _rawval(self) &&
+                _sharedstate->_cached_slice_start == sidx &&
+                _sharedstate->_cached_slice_len == slice_len) {
+                retval = _sharedstate->_cached_slice_result;
+                return 1;
+            }
+            retval = SQString::Create(_ss(this), &_stringval(self)[sidx], slice_len);
+            _sharedstate->_cached_slice_source = self;
+            _sharedstate->_cached_slice_result = retval;
+            _sharedstate->_cached_slice_start = sidx;
+            _sharedstate->_cached_slice_len = slice_len;
             return 1;
         }
         return 0;

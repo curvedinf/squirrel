@@ -21,6 +21,10 @@ SQSharedState::SQSharedState()
     _notifyallexceptions = false;
     _foreignptr = NULL;
     _releasehook = NULL;
+    _cached_slice_source.Null();
+    _cached_slice_result.Null();
+    _cached_slice_start = 0;
+    _cached_slice_len = 0;
     _cached_tostring_true.Null();
     _cached_tostring_false.Null();
     _cached_tostring_null.Null();
@@ -219,6 +223,8 @@ SQSharedState::~SQSharedState()
     _cached_tostring_true.Null();
     _cached_tostring_false.Null();
     _cached_tostring_null.Null();
+    _cached_slice_source.Null();
+    _cached_slice_result.Null();
     for(SQInteger i = 0; i < CACHED_TOSTRING_INT_COUNT; i++) {
         _cached_tostring_ints[i].Null();
     }
