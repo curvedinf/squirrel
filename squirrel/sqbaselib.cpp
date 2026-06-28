@@ -15,25 +15,45 @@
 
 static inline SQChar fast_lower_char(SQChar ch)
 {
-    if(ch >= _SC('A') && ch <= _SC('Z')) {
-        return (SQChar)(ch + (_SC('a') - _SC('A')));
-    }
 #ifdef SQUNICODE
+    if(ch <= 0x7f) {
+        if(ch >= _SC('A') && ch <= _SC('Z')) {
+            return (SQChar)(ch + (_SC('a') - _SC('A')));
+        }
+        return ch;
+    }
     return (SQChar)towlower(ch);
 #else
-    return (SQChar)tolower((unsigned char)ch);
+    unsigned char uch = (unsigned char)ch;
+    if(uch < 0x80) {
+        if(ch >= _SC('A') && ch <= _SC('Z')) {
+            return (SQChar)(ch + (_SC('a') - _SC('A')));
+        }
+        return ch;
+    }
+    return (SQChar)tolower(uch);
 #endif
 }
 
 static inline SQChar fast_upper_char(SQChar ch)
 {
-    if(ch >= _SC('a') && ch <= _SC('z')) {
-        return (SQChar)(ch - (_SC('a') - _SC('A')));
-    }
 #ifdef SQUNICODE
+    if(ch <= 0x7f) {
+        if(ch >= _SC('a') && ch <= _SC('z')) {
+            return (SQChar)(ch - (_SC('a') - _SC('A')));
+        }
+        return ch;
+    }
     return (SQChar)towupper(ch);
 #else
-    return (SQChar)toupper((unsigned char)ch);
+    unsigned char uch = (unsigned char)ch;
+    if(uch < 0x80) {
+        if(ch >= _SC('a') && ch <= _SC('z')) {
+            return (SQChar)(ch - (_SC('a') - _SC('A')));
+        }
+        return ch;
+    }
+    return (SQChar)toupper(uch);
 #endif
 }
 

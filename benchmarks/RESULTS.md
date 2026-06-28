@@ -14,33 +14,44 @@ Policy:
 Use this for the next candidate unless a newer retained result is promoted.
 
 Date: `2026-06-28`
-Build: `./build-pgo-lto-logicmove/bin/sqbench`
+Build: `./build-pgo-lto-caseascii/bin/sqbench`
 CPU pinning: `taskset -c 2`
 Command set:
 
 ```bash
-taskset -c 2 ./build-pgo-lto-logicmove/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/registry_catalog.nut 500
-taskset -c 2 ./build-pgo-lto-logicmove/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/world_map_graph.nut 30 18 12
-taskset -c 2 ./build-pgo-lto-logicmove/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/inventory_flow.nut 2200 11
-taskset -c 2 ./build-pgo-lto-logicmove/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/session_context_flow.nut 450 12
-taskset -c 2 ./build-pgo-lto-logicmove/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/scenario_tick_flow.nut 10200 24 14
-taskset -c 2 ./build-pgo-lto-logicmove/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/volume_presence_scan.nut 650 6 12 6
+taskset -c 2 ./build-pgo-lto-caseascii/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/registry_catalog.nut 500
+taskset -c 2 ./build-pgo-lto-caseascii/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/world_map_graph.nut 30 18 12
+taskset -c 2 ./build-pgo-lto-caseascii/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/inventory_flow.nut 2200 11
+taskset -c 2 ./build-pgo-lto-caseascii/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/session_context_flow.nut 450 12
+taskset -c 2 ./build-pgo-lto-caseascii/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/scenario_tick_flow.nut 10200 24 14
+taskset -c 2 ./build-pgo-lto-caseascii/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/volume_presence_scan.nut 650 6 12 6
 ```
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
-| `registry_catalog` | `45.312` | `2019808` |
-| `world_map_graph` | `47.475` | `325170` |
-| `inventory_flow` | `45.072` | `580946` |
-| `session_context_flow` | `43.461` | `593415` |
-| `scenario_tick_flow` | `51.875` | `2030324` |
-| `volume_presence_scan` | `48.152` | `308206` |
+| `registry_catalog` | `45.918` | `2019808` |
+| `world_map_graph` | `47.546` | `325170` |
+| `inventory_flow` | `45.501` | `580946` |
+| `session_context_flow` | `43.005` | `593415` |
+| `scenario_tick_flow` | `47.852` | `2030324` |
+| `volume_presence_scan` | `48.407` | `308206` |
 
-This retained head keeps the one-entry shared-state `string.slice` result cache, the `_OP_PREPCALLK` one-argument default-delegate natclosure fast path, and now lets safe result-producing opcodes retarget directly into the merged target on the right-hand side of short-circuit `||` / `&&` expressions, cutting emitted `MOVE` opcodes across the six benchmark workloads from `450` to `253`. After six-workload source checksum smoke in both orders (`361.698 ms` versus `373.320 ms`, then `368.975 ms` versus `373.509 ms`), identical custom short-circuit/method-call probe output plus identical `samples/class.nut` and `samples/generators.nut` output on both the source and PGO interpreters, fresh PGO+LTO retraining, and two clean pinned long-suite control pairs against the previous retained build (`278.499 ms` versus `285.453 ms`, then `281.347 ms` versus `285.327 ms`), the authoritative six-workload retained baseline is `281.347 ms` total. This promoted retained head is `3.353 ms` (`+1.178%`) faster than the previous authoritative retained baseline of `284.700 ms`. Earlier baseline sections below are preserved for history.
+This retained head keeps the one-entry shared-state `string.slice` result cache, the `_OP_PREPCALLK` one-argument default-delegate natclosure fast path, the short-circuit `||` / `&&` move-retargeting reduction, and now short-circuits ASCII `tolower()` / `toupper()` requests by returning unchanged ASCII bytes directly instead of routing already-correct lowercase, uppercase, digits, and punctuation through libc case conversion while leaving non-ASCII handling unchanged. After a clean custom case-mapping probe plus identical `samples/class.nut` and `samples/generators.nut` output on both the source and PGO interpreters, six-workload source checksum smoke in both orders (`360.442 ms` versus `362.767 ms`, then `357.373 ms` versus `363.812 ms`), fresh PGO+LTO retraining, and two clean pinned long-suite control pairs against the previous retained build (`278.229 ms` versus `278.584 ms`, then `278.117 ms` versus `279.761 ms`), the authoritative six-workload retained baseline is `278.229 ms` total. This promoted retained head is `3.118 ms` (`+1.108%`) faster than the previous authoritative retained baseline of `281.347 ms`. Earlier baseline sections below are preserved for history.
 
-### Rejected on current retained head `281.347 ms`
+### Rejected on immediate prior retained head `281.347 ms`
 
-No retries recorded yet on this retained head.
+| Change | Frozen baseline | Retry results | Outcome |
+| --- | --- | --- | --- |
+| Route hot `string.find()` and `array.append()` / `array.push()` default-delegate natives through new `TryFastCallNative()` intrinsics so successful cached `_OP_PREPCALLK` calls can bypass generic native-frame setup | targeted direct probes kept `string.find()`, `array.append()`, and `array.push()` output identical; `samples/class.nut` and `samples/generators.nut` also still matched; six-workload source smoke won in both orders at candidate `57.669 / 59.909 / 59.468 / 55.760 / 59.215 / 63.264 ms` (`355.285 ms`) versus control `58.177 / 60.447 / 58.736 / 60.443 / 59.089 / 62.437 ms` (`359.329 ms`, `+1.125%`), then candidate `57.047 / 60.364 / 59.100 / 56.983 / 59.358 / 63.427 ms` (`356.279 ms`) versus reverse control `58.483 / 59.906 / 65.230 / 58.300 / 59.302 / 63.145 ms` (`364.366 ms`, `+2.219%`) | fresh pinned PGO+LTO lost overall: first long-suite pair regressed to candidate `44.756 / 47.621 / 44.885 / 44.971 / 50.928 / 48.590 ms` (`281.751 ms`) versus live control `45.017 / 47.322 / 45.289 / 43.583 / 49.440 / 48.127 ms` (`278.778 ms`, `-1.067%`), and reverse-order confirmation only narrowed the loss at candidate `44.554 / 47.571 / 46.031 / 44.830 / 49.182 / 48.376 ms` (`280.544 ms`) versus reverse control `45.435 / 47.773 / 45.337 / 44.787 / 48.476 / 48.574 ms` (`280.382 ms`, `-0.058%`) | rolled back; source-only win did not survive PGO |
+| Skip the redundant second direct table/class/instance probe only at `_OP_GETK` / `_OP_PREPCALLK` miss sites by jumping straight into fallback/default-delegate handling, without changing the generic `Get()` direct-hit path | targeted probe kept table delegate `len()`, missing-property errors, dynamic-key misses, and class-field access behavior equivalent; `samples/class.nut` and `samples/generators.nut` also still matched | rejected during source smoke before a pinned PGO retry: first full-suite source pass regressed from control `59.065 / 59.412 / 59.256 / 55.272 / 58.810 / 61.992 ms` (`353.807 ms` total) to candidate `62.148 / 62.204 / 61.744 / 59.865 / 64.530 / 65.135 ms` (`375.626 ms`, `-6.167%`), and reverse-order confirmation also lost at candidate `62.809 / 63.733 / 62.830 / 58.618 / 62.902 / 64.660 ms` (`375.552 ms`) versus reverse control `58.417 / 59.959 / 59.008 / 56.499 / 59.542 / 62.998 ms` (`356.423 ms`, `-5.367%`) | rolled back |
+| Cache the four hot default-delegate method names (`len`, `tointeger`, `tofloat`, `tostring`) directly on each interned `SQString`, replacing repeated key classification in `_OP_PREPCALLK` and `InvokeDefaultDelegate()` | targeted fast-delegate probe stayed output-identical; `samples/class.nut` and `samples/generators.nut` also still matched; fresh retained-build callgrind on `session_context_flow` showed `FastDelegateKeyForCall()` and nearby `_OP_PREPCALLK` helper work still hot inside `SQVM::Execute()` | strong six-workload source-only win did not survive PGO: source control-first improved from control `58.747 / 65.699 / 64.630 / 55.596 / 58.541 / 63.305 ms` (`366.518 ms` total) to candidate `59.183 / 58.339 / 58.121 / 53.486 / 58.278 / 59.318 ms` (`346.725 ms`, `+5.400%`), and reverse-order source confirmation also stayed ahead at candidate `57.619 / 59.192 / 56.490 / 54.240 / 57.749 / 59.699 ms` (`344.989 ms`) versus reverse control `57.741 / 60.320 / 60.976 / 56.851 / 58.935 / 73.459 ms` (`368.282 ms`, `+6.325%`), but fresh pinned PGO+LTO lost on the first long-suite pair at candidate `46.609 / 48.703 / 46.032 / 43.409 / 48.487 / 49.361 ms` (`282.601 ms`) versus control `45.085 / 47.680 / 44.974 / 43.134 / 48.150 / 47.899 ms` (`276.922 ms`, `-2.051%`), and the reverse-order confirmation only edged ahead at candidate `47.383 / 47.937 / 46.044 / 42.973 / 48.494 / 49.403 ms` (`282.234 ms`) versus reverse control `45.352 / 47.843 / 45.108 / 43.184 / 52.547 / 48.607 ms` (`282.641 ms`, `+0.144%`) while both candidate totals still stayed above the authoritative retained baseline `281.347 ms` | rolled back; source-only win did not survive PGO |
+| Rewrite `DLOAD`-fed literal-key `_OP_PREPCALL` sites into `_OP_PREPCALLK`, keeping only the non-key literal as a plain `LOAD` so stacked dual-literal setup disappears before method calls | targeted method-call probe stayed output-identical; `samples/class.nut` and `samples/generators.nut` also still matched; rebuilt debug dumps raised total `_OP_PREPCALLK` count to `527`, eliminated `_OP_PREPCALL` across the six workloads, and removed the remaining `DLOAD`-fed second-slot prepcall sites | rejected during source smoke before a pinned PGO retry: first full-suite source pass regressed from control `58.799 / 59.688 / 64.171 / 55.313 / 59.013 / 62.807 ms` (`359.791 ms` total) to candidate `60.595 / 63.023 / 60.772 / 56.311 / 61.972 / 64.673 ms` (`367.346 ms`, `-2.100%`), and reverse-order confirmation also lost at candidate `61.261 / 61.883 / 60.594 / 58.517 / 61.648 / 64.745 ms` (`368.648 ms`) versus reverse control `58.402 / 60.438 / 58.696 / 59.259 / 59.140 / 62.781 ms` (`358.716 ms`, `-2.769%`) | rolled back |
+| Fuse literal-key zero-arg calls and literal-key one-moved-arg calls into dedicated compiler-emitted opcodes, collapsing `_OP_PREPCALLK + _OP_CALL` into `CALL0K` and `_OP_PREPCALLK + _OP_MOVE + _OP_CALL` into `CALL1KMV` | targeted call-shape probe stayed output-identical for user-method and delegate calls; `samples/class.nut` and `samples/generators.nut` also still matched; rebuilt debug dumps showed `CALL0K` `184` times and `CALL1KMV` `62` times across the six workloads | not stable enough to promote: first full-suite source pass improved from control `60.351 / 61.239 / 65.260 / 56.203 / 58.930 / 63.384 ms` (`365.367 ms` total) to candidate `58.079 / 63.671 / 60.518 / 57.476 / 59.253 / 62.991 ms` (`361.988 ms`, `+0.925%`), but reverse-order confirmation lost at candidate `58.299 / 63.614 / 60.963 / 57.527 / 59.155 / 62.798 ms` (`362.356 ms`) versus reverse control `59.394 / 60.273 / 58.716 / 56.429 / 59.280 / 62.624 ms` (`354.884 ms`, `-2.106%`), and a third control-first tie-break also lost at candidate `57.623 / 64.563 / 59.159 / 56.230 / 59.060 / 63.752 ms` (`360.387 ms`) versus control `57.711 / 64.466 / 58.934 / 56.071 / 59.061 / 62.397 ms` (`358.640 ms`, `-0.487%`) | rolled back |
+| Fuse stack-based `EQ` / `NE` immediately followed by `JZ` into `_OP_JCMP`, avoiding temporary bool materialization for hot conditional branches | targeted equality-branch probe matched stack-based and literal-based `==` / `!=` behavior; `samples/class.nut` and `samples/generators.nut` also still matched; rebuilt debug dumps reduced adjacent `EQ -> JZ` from `131` to `49` and `NE -> JZ` from `31` to `20` while increasing `_OP_JCMP` sites from `67` to `160` across the six workloads | rejected during source smoke before a pinned PGO retry: first full-suite source pass regressed from control `59.361 / 60.484 / 59.112 / 56.421 / 58.932 / 61.988 ms` (`356.298 ms` total) to candidate `61.545 / 62.207 / 60.903 / 59.991 / 62.272 / 64.303 ms` (`371.221 ms`, `-4.188%`), and reverse-order confirmation also lost at candidate `60.926 / 61.886 / 60.175 / 58.778 / 62.448 / 65.210 ms` (`369.423 ms`) versus reverse control `66.786 / 60.273 / 58.716 / 56.429 / 59.280 / 62.624 ms` (`364.108 ms`, `-1.460%`) | rolled back |
+| Fold up to three simple argument-setup ops between `_OP_PREPCALLK` and the following `_OP_CALL`, replaying `MOVE` / `DMOVE` / `LOAD` / `DLOAD` / `LOADINT` / `LOADFLOAT` / `LOADBOOL` directly inside the existing direct-call fast paths | targeted PREPCALLK probe stayed output-identical across user-method and delegate-method calls that exercised `MOVE`, `DMOVE`, `DLOAD`, `LOADINT`, `LOADFLOAT`, and `LOADBOOL`; `samples/class.nut` and `samples/generators.nut` also still matched | rejected during source smoke before a pinned PGO retry: first full-suite source pass regressed from control `59.294 / 59.736 / 61.770 / 55.573 / 58.895 / 62.689 ms` (`357.957 ms` total) to candidate `61.034 / 63.242 / 62.182 / 57.775 / 61.358 / 66.385 ms` (`371.976 ms`, `-3.917%`), and reverse-order confirmation also lost at candidate `61.321 / 63.565 / 61.161 / 58.435 / 60.562 / 66.387 ms` (`371.431 ms`) versus reverse control `58.118 / 60.659 / 59.054 / 55.206 / 59.313 / 62.938 ms` (`355.288 ms`, `-4.544%`) | rolled back |
+| Fuse the exact `EXISTS -> JZ -> same-key GET/GETK` interpreter sequence so successful presence checks reuse the already-resolved direct value instead of probing again | targeted present/missing/null probe stayed output-identical for literal-key, dynamic-key, array-index, and string-index cases | rejected during source smoke before a pinned PGO retry: first full-suite source pass regressed from control `58.131 / 60.348 / 58.835 / 60.214 / 64.316 / 71.394 ms` (`373.238 ms` total) to candidate `63.426 / 64.312 / 64.614 / 59.869 / 64.634 / 67.012 ms` (`383.867 ms`, `-2.848%`), and reverse-order confirmation lost more sharply at candidate `66.552 / 65.061 / 64.163 / 60.253 / 63.174 / 67.453 ms` (`386.656 ms`) versus reverse control `60.676 / 60.881 / 59.630 / 55.782 / 59.434 / 62.563 ms` (`358.966 ms`, `-7.714%`) | rolled back |
+| Inline the hot direct container-lookup helpers and specialize known-string `_OP_GETK` / `_OP_PREPCALLK` literal-key probes before the generic fallback path | all six source checksums still matched in both orders | rejected during source smoke before a pinned PGO retry: first full-suite source pass regressed from control `58.270 / 64.317 / 58.644 / 57.106 / 59.528 / 62.518 ms` (`360.383 ms` total) to candidate `65.801 / 64.319 / 63.969 / 59.599 / 63.219 / 66.078 ms` (`382.985 ms`, `-6.272%`), and reverse-order confirmation also lost at candidate `63.154 / 63.710 / 64.060 / 58.367 / 62.291 / 67.253 ms` (`378.835 ms`) versus reverse control `58.893 / 60.011 / 59.036 / 56.096 / 58.773 / 62.858 ms` (`355.667 ms`, `-6.514%`) | rolled back |
+| Extend the cached `_OP_PREPCALLK` default-delegate natclosure fast path to try successful multi-arg intrinsics through `TryFastCallNative()` before falling back to generic `CallNative()` setup | direct `slice(start,end)`, `tointeger(base)`, and `tofloat()` probe stayed output-identical; all six source checksums still matched | rejected during source smoke before a pinned PGO retry: first full-suite source pass regressed from control `62.337 / 58.760 / 58.749 / 56.064 / 59.436 / 71.508 ms` (`366.854 ms` total) to candidate `62.124 / 62.336 / 61.933 / 58.389 / 63.327 / 65.729 ms` (`373.838 ms`, `-1.903%`), and reverse-order confirmation lost more sharply at candidate `62.570 / 61.561 / 61.920 / 59.600 / 62.361 / 65.487 ms` (`373.499 ms`) versus reverse control `58.547 / 59.870 / 57.414 / 56.032 / 59.275 / 62.055 ms` (`353.193 ms`, `-5.750%`) | rolled back |
 
 ### Rejected on immediate prior retained head `284.700 ms`
 
@@ -99,6 +110,22 @@ These retries were run directly against the previous six-workload retained head 
 ### Immediate Prior Six-Workload Retained-Head Baseline
 
 Date: `2026-06-28`
+Build: `./build-pgo-lto-logicmove/bin/sqbench`
+
+| Workload | run_avg_ms | checksum |
+| --- | ---: | ---: |
+| `registry_catalog` | `45.312` | `2019808` |
+| `world_map_graph` | `47.475` | `325170` |
+| `inventory_flow` | `45.072` | `580946` |
+| `session_context_flow` | `43.461` | `593415` |
+| `scenario_tick_flow` | `51.875` | `2030324` |
+| `volume_presence_scan` | `48.152` | `308206` |
+
+This was the retained head before the ASCII no-change `tolower()` / `toupper()` promotion. Its authoritative six-workload total was `281.347 ms`.
+
+### Earlier Prior Six-Workload Retained-Head Baseline
+
+Date: `2026-06-28`
 Build: `./build-pgo-lto-prepcallfast/bin/sqbench`
 
 | Workload | run_avg_ms | checksum |
@@ -111,22 +138,6 @@ Build: `./build-pgo-lto-prepcallfast/bin/sqbench`
 | `volume_presence_scan` | `50.238` | `308206` |
 
 This was the retained head before the short-circuit `||` / `&&` target-retargeting promotion. Its authoritative six-workload total was `284.700 ms`.
-
-### Earlier Prior Six-Workload Retained-Head Baseline
-
-Date: `2026-06-28`
-Build: `./build-pgo-lto-slicecache/bin/sqbench`
-
-| Workload | run_avg_ms | checksum |
-| --- | ---: | ---: |
-| `registry_catalog` | `46.027` | `2019808` |
-| `world_map_graph` | `49.385` | `325170` |
-| `inventory_flow` | `46.108` | `580946` |
-| `session_context_flow` | `44.464` | `593415` |
-| `scenario_tick_flow` | `49.960` | `2030324` |
-| `volume_presence_scan` | `50.150` | `308206` |
-
-This was the retained head before the `_OP_PREPCALLK` one-argument default-delegate natclosure fast path was promoted. Its authoritative six-workload total was `286.094 ms`.
 
 ### Earlier Prior Six-Workload Retained-Head Baseline
 
