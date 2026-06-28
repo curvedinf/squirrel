@@ -212,12 +212,11 @@ static SQInteger base_assert(HSQUIRRELVM v)
     return 0;
 }
 
-static SQInteger get_slice_params(HSQUIRRELVM v,SQInteger &sidx,SQInteger &eidx,SQObjectPtr &o)
+static SQInteger get_slice_params(HSQUIRRELVM v,SQInteger &sidx,SQInteger &eidx)
 {
     SQInteger top = sq_gettop(v);
     sidx=0;
     eidx=0;
-    o=stack_get(v,1);
     if(top>1){
         SQObjectPtr &start=stack_get(v,2);
         if(sq_type(start)!=OT_NULL && sq_isnumeric(start)){
@@ -1067,8 +1066,8 @@ static SQInteger array_sort(HSQUIRRELVM v)
 static SQInteger array_slice(HSQUIRRELVM v)
 {
     SQInteger sidx,eidx;
-    SQObjectPtr o;
-    if(get_slice_params(v,sidx,eidx,o)==-1)return -1;
+    SQObjectPtr &o=stack_get(v,1);
+    if(get_slice_params(v,sidx,eidx)==-1)return -1;
     SQInteger alen = _array(o)->Size();
     if(sidx < 0)sidx = alen + sidx;
     if(eidx < 0)eidx = alen + eidx;
@@ -1114,8 +1113,8 @@ const SQRegFunction SQSharedState::_array_default_delegate_funcz[]={
 static SQInteger string_slice(HSQUIRRELVM v)
 {
     SQInteger sidx,eidx;
-    SQObjectPtr o;
-    if(SQ_FAILED(get_slice_params(v,sidx,eidx,o)))return -1;
+    SQObjectPtr &o=stack_get(v,1);
+    if(SQ_FAILED(get_slice_params(v,sidx,eidx)))return -1;
     SQInteger slen = _string(o)->_len;
     if(sidx < 0)sidx = slen + sidx;
     if(eidx < 0)eidx = slen + eidx;
@@ -1153,8 +1152,8 @@ static SQInteger string_find(HSQUIRRELVM v)
 static SQInteger string_case_map(HSQUIRRELVM v, SQChar (*map_char)(SQChar))
 {
     SQInteger sidx,eidx;
-    SQObjectPtr str;
-    if(SQ_FAILED(get_slice_params(v,sidx,eidx,str))) return -1;
+    SQObjectPtr &str=stack_get(v,1);
+    if(SQ_FAILED(get_slice_params(v,sidx,eidx))) return -1;
     SQInteger slen = _string(str)->_len;
     if(sidx < 0) sidx = slen + sidx;
     if(eidx < 0) eidx = slen + eidx;
