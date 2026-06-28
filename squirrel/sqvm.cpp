@@ -434,6 +434,14 @@ bool SQVM::StringCat(const SQObjectPtr &str,const SQObjectPtr &obj,SQObjectPtr &
         b = &btmp;
     }
     SQInteger l = _string(*a)->_len , ol = _string(*b)->_len;
+    if(l == 0) {
+        dest = *b;
+        return true;
+    }
+    if(ol == 0) {
+        dest = *a;
+        return true;
+    }
 #ifdef SQ_NO_FAST_STRINGCAT
     SQChar* s = _sp(sq_rsl(l + ol + 1));
     memcpy(s, _stringval(*a), sq_rsl(l));

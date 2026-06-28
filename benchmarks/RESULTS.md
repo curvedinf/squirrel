@@ -26,15 +26,28 @@ taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benc
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
+| `registry_catalog` | `18.690` | `727105` |
+| `world_map_graph` | `52.478` | `325170` |
+| `inventory_flow` | `76.664` | `812233` |
+
+This baseline came from retaining empty-string fast paths in `SQVM::StringCat()` over the prior retained head of `18.804 / 52.961 / 76.832 ms`. The clean retry was `18.624 / 52.597 / 76.493 ms` (`+0.594%` overall), and the confirmation run promoted here was `18.690 / 52.478 / 76.664 ms` (`+0.515%` overall).
+
+## Historical Reference Baselines
+
+### Immediate Prior Retained-Head Baseline
+
+Date: `2026-06-27`
+Build: `./build-pgo-lto/bin/sqbench`
+
+| Workload | run_avg_ms | checksum |
+| --- | ---: | ---: |
 | `registry_catalog` | `18.804` | `727105` |
 | `world_map_graph` | `52.961` | `325170` |
 | `inventory_flow` | `76.832` | `812233` |
 
-This baseline came from retaining same-value fast paths in `SQObjectPtr::operator=(bool)` and `SQObjectPtr::Null()` over a fresh pinned rerun of the prior retained PGO+LTO head of `19.633 / 54.329 / 79.579 ms`. The clean retry was `19.100 / 54.267 / 78.035 ms` (`+1.393%` overall), and the confirmation run promoted here was `18.804 / 52.961 / 76.832 ms` (`+3.220%` overall).
+This was the retained head before the empty-string `SQVM::StringCat()` fast path was promoted.
 
-## Historical Reference Baselines
-
-### Immediate Prior Refreshed Retained-Head Baseline
+### Earlier Prior Refreshed Retained-Head Baseline
 
 Date: `2026-06-27`
 Build: `./build-pgo-lto/bin/sqbench`
@@ -180,6 +193,7 @@ Some earlier runs were kept before this ledger existed. Where exact per-workload
 
 | Change | Baseline used | Result | Overall |
 | --- | --- | --- | ---: |
+| Empty-string fast paths in `SQVM::StringCat()` | retained PGO+LTO head `18.804 / 52.961 / 76.832 ms` | clean retry: `18.624 / 52.597 / 76.493 ms`; confirmation promoted: `18.690 / 52.478 / 76.664 ms` | `+0.515%` |
 | Same-value fast paths in `SQObjectPtr::operator=(bool)` and `SQObjectPtr::Null()` | refreshed retained PGO+LTO head `19.633 / 54.329 / 79.579 ms` | clean retry: `19.100 / 54.267 / 78.035 ms` (`+1.393%`); confirmation promoted: `18.804 / 52.961 / 76.832 ms` | `+3.220%` |
 | Full-hash guard before `memcmp()` in `SQStringTable::Concat()` / `Add()` | refreshed retained PGO+LTO head `18.994 / 54.189 / 80.237 ms` | clean retry: `19.085 / 53.473 / 77.881 ms` (`+1.943%`); confirmation promoted: `19.302 / 53.996 / 79.207 ms` | `+0.596%` |
 | Interned string-key specialized direct get paths for `table` / `class` / `instance` lookups and default delegates | retained PGO+LTO head `18.586 / 52.975 / 81.885 ms` | clean retry: `18.471 / 53.055 / 78.777 ms` (`+2.048%`); confirmation promoted: `18.672 / 52.394 / 78.479 ms` | `+2.542%` |
@@ -211,6 +225,31 @@ This older retained PGO snapshot predates the retained `-fno-semantic-interposit
 ## Rolled Back Results
 
 These candidates were benchmark-negative or otherwise not retained.
+
+### Re-evaluated against retained head `18.804 / 52.961 / 76.832 ms`
+
+These retries were run after retaining same-value fast paths in `SQObjectPtr::operator=(bool)` and `SQObjectPtr::Null()`.
+
+| Change | Frozen baseline | Retry results | Outcome |
+| --- | --- | --- | --- |
+| Skip `CloseOuters()` when the head open outer is already below the closing boundary | `18.804 / 52.961 / 76.832 ms` | clean retry: `18.500 / 53.249 / 78.749 ms` (`-1.279%` by total) | rolled back |
+| Binary insertion search for comparator-driven `array.sort()` small partitions | `18.804 / 52.961 / 76.832 ms` | clean retry: `19.105 / 54.901 / 77.814 ms` (`-2.169%` by total) | rolled back |
+| String-key specialized `SQTable::Get()` / `Set()` / `NewSlot()` / `Remove()` / `Exists()` | `18.804 / 52.961 / 76.832 ms` | initial retry: `18.340 / 52.594 / 75.836 ms` (`+1.229%` by total); post-contention rerun after an unrelated external link finished: `18.640 / 53.834 / 76.929 ms` (`-0.542%` by total) | rolled back; not stable enough to promote |
+| Remove redundant `_delegate` branches around `GetMetaMethod()` and use existence-only lookup in table `newslot` | `18.804 / 52.961 / 76.832 ms` | clean retry: `20.176 / 55.567 / 90.065 ms` (`-11.582%` by total) | rolled back |
+| Specialized `SQTable::Rehash()` reinsertion helper to bypass duplicate-checking `NewSlot()` work | `18.804 / 52.961 / 76.832 ms` | clean retry: `18.489 / 55.924 / 77.980 ms` (`-2.555%` by total) | rolled back |
+| Same-value fast path in generic `SQObjectPtr` copy assignment | `18.804 / 52.961 / 76.832 ms` | clean retry: `19.151 / 54.260 / 78.521 ms` (`-2.244%` by total) | rolled back |
+| Split-loop `_hashstr2()` rewrite for concatenated string hashing in `SQStringTable::Concat()` | `18.804 / 52.961 / 76.832 ms` | initial retry: `18.554 / 51.927 / 76.638 ms` (`+0.995%` by total); confirmation retry: `19.077 / 52.633 / 77.545 ms` (`-0.443%` by total) | rolled back; not stable enough to promote |
+| Short-suffix fast path in `_hashstr2()` for concatenations where the second operand contributes only one sampled byte | `18.804 / 52.961 / 76.832 ms` | initial retry: `18.272 / 52.200 / 76.933 ms` (`+0.802%` by total); follow-up registry rerun stayed positive at `18.241 ms`, but `world_map_graph` diverged to `63.132 ms`, and a dedicated world-only rerun still came back at `55.018 ms` vs the `52.961 ms` baseline | rolled back; `world_map_graph` not stable enough to promote |
+| String-key-specialized `SQVM::Get()` / default-delegate helpers with reused root-fallback `strkey` | `18.804 / 52.961 / 76.832 ms` | initial retry: `18.348 / 52.420 / 76.383 ms` (`+0.973%` by total); confirmation retry: `18.658 / 53.280 / 78.396 ms` (`-1.169%` by total) | rolled back; not stable enough to promote |
+| Extended cached delegate-method fast path to array/string `push` / `append` / `slice` / `find` with length-based key dispatch | `18.804 / 52.961 / 76.832 ms` | initial retry: `18.819 / 52.818 / 77.097 ms` (`-0.092%` by total); follow-up registry rerun was `18.774 ms`, but `world_map_graph` degraded to `55.556 ms` on confirmation | rolled back; not stable enough to promote |
+| Direct stdlib `array_append()` implementation instead of routing through `sq_arrayappend()` | `18.804 / 52.961 / 76.832 ms` | clean retry: `18.229 / 52.910 / 80.653 ms` (`-2.150%` by total) | rolled back |
+| Inline the initial 4 `SQTable` hash nodes into the table object to avoid a second allocation for small tables | `18.804 / 52.961 / 76.832 ms` | rejected during the PGO training harness before an authoritative pinned run: `registry_catalog` and `world_map_graph` checksums still matched, but `inventory_flow` changed from `812233` to `808510` | rolled back; invalid semantics |
+| State-local cache for recycled 4-node `SQTable` hash blocks | `18.804 / 52.961 / 76.832 ms` | rejected during the pinned PGO training harness before an authoritative pinned run: `registry_catalog` crashed with `Segmentation fault (core dumped)` | rolled back; invalid semantics |
+| Short-vector fast path for `CallNative()` typemask validation | `18.804 / 52.961 / 76.832 ms` | clean retry: `18.583 / 54.308 / 79.132 ms` (`-2.306%` by total) | rolled back |
+| Skip repeated direct table/class/instance lookup in `Get()` after a `_OP_GETK` / `_OP_PREPCALLK` direct miss | `18.804 / 52.961 / 76.832 ms` | clean retry: `18.674 / 53.405 / 78.564 ms` (`-1.377%` by total) | rolled back |
+| Bypass `TranslateIndex()` in `array` / `string` / `table` `Next()` iteration | `18.804 / 52.961 / 76.832 ms` | initial retry: `18.468 / 53.054 / 76.916 ms` (`+0.107%` by total); confirmation retry: `18.836 / 54.375 / 77.671 ms` (`-1.538%` by total) | rolled back; not stable enough to promote |
+| Move return values directly out of callee/native frame slots when no open outer captures the source slot | `18.804 / 52.961 / 76.832 ms` | initial retry: `18.427 / 52.708 / 76.433 ms` (`+0.692%` by total); confirmation retry: `18.357 / 52.859 / 77.361 ms` (`+0.013%` by total); tie-break retry: `18.675 / 53.142 / 76.973 ms` (`-0.130%` by total) | rolled back; not stable enough to promote |
+| Direct pointer access to member-table values for class / instance `Get*` / `Set` / attribute lookup | `18.804 / 52.961 / 76.832 ms` | clean retry: `19.036 / 52.531 / 85.431 ms` (`-5.653%` by total) | rolled back |
 
 ### Re-evaluated against retained head `18.994 / 54.189 / 80.237 ms`
 
