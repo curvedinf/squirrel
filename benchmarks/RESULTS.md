@@ -29,6 +29,24 @@ taskset -c 2 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benc
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
+| `registry_catalog` | `46.535` | `2019808` |
+| `world_map_graph` | `49.361` | `325170` |
+| `inventory_flow` | `46.037` | `580946` |
+| `session_context_flow` | `44.737` | `593415` |
+| `scenario_tick_flow` | `50.074` | `2030324` |
+| `volume_presence_scan` | `50.871` | `308206` |
+
+This retained head adds ASCII-fast `string.tolower()` / `string.toupper()` mapping, unchanged-slice result reuse, and a prehashed `SQStringTable::AddWithHash()` path so changed case-map results do not recompute their interned-string hash on insertion. After six-workload source checksum smoke, direct plus compiled-bytecode string-case probes, two stock `samples/` interpreter runs, fresh PGO retraining, two clean sequential quiet-core control pairs against the prior retained worktree, and a final canonical `./build-pgo-lto/bin/sqbench` refresh, the authoritative six-workload retained baseline is `287.615 ms` total. Earlier baseline sections below are preserved for history.
+
+## Historical Reference Baselines
+
+### Immediate Prior Six-Workload Retained-Head Baseline
+
+Date: `2026-06-28`
+Build: `./build-pgo-lto/bin/sqbench`
+
+| Workload | run_avg_ms | checksum |
+| --- | ---: | ---: |
 | `registry_catalog` | `47.387` | `2019808` |
 | `world_map_graph` | `50.392` | `325170` |
 | `inventory_flow` | `47.367` | `580946` |
@@ -36,11 +54,9 @@ taskset -c 2 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benc
 | `scenario_tick_flow` | `52.132` | `2030324` |
 | `volume_presence_scan` | `51.213` | `308206` |
 
-This retained head adds a bounded thread-local small-block cache under `sq_vm_malloc()` / `sq_vm_realloc()` / `sq_vm_free()`. After six-workload checksum smoke, two stock `samples/` interpreter runs, fresh PGO retraining, and two clean sequential quiet-core control pairs against the prior retained worktree, the authoritative six-workload retained baseline is `296.202 ms` total. Earlier baseline sections below are preserved for history.
+This was the retained head before the ASCII-fast string-case mapping plus prehashed string-table insertion change was promoted. Its authoritative six-workload total was `296.202 ms`.
 
-## Historical Reference Baselines
-
-### Immediate Prior Six-Workload Retained-Head Baseline
+### Earlier Prior Six-Workload Retained-Head Baseline
 
 Date: `2026-06-27`
 Build: `./build-pgo-lto/bin/sqbench`
@@ -267,6 +283,8 @@ Some earlier runs were kept before this ledger existed. Where exact per-workload
 
 | Change | Baseline used | Result | Overall |
 | --- | --- | --- | ---: |
+| ASCII-fast `string.tolower()` / `string.toupper()` mapping with unchanged-slice reuse and prehashed string-table insertion | retained PGO+LTO head `47.387 / 50.392 / 47.367 / 47.711 / 52.132 / 51.213 ms` | clean retry after fresh PGO+LTO retrains: candidate `46.364 / 49.291 / 46.102 / 45.178 / 50.649 / 52.950 ms` versus live control `47.293 / 50.745 / 48.385 / 47.481 / 51.674 / 50.882 ms` (`+1.998%` by total); reverse-order confirmation stayed ahead at `47.256 / 49.563 / 46.086 / 44.357 / 50.463 / 53.384 ms` versus live control `47.886 / 50.933 / 49.038 / 47.770 / 51.898 / 51.205 ms` (`+2.551%` by total); the final canonical `./build-pgo-lto/bin/sqbench` refresh settled at `46.535 / 49.361 / 46.037 / 44.737 / 50.074 / 50.871 ms` | `+2.899%` |
+| Bounded thread-local small-block cache under `sq_vm_malloc()` / `sq_vm_realloc()` / `sq_vm_free()` | retained PGO+LTO head `50.345 / 53.326 / 50.398 / 48.564 / 52.663 / 51.472 ms` | six-workload checksum smoke, `samples/class.nut`, `samples/generators.nut`, fresh PGO+LTO retraining, and two clean sequential quiet-core control pairs promoted `47.387 / 50.392 / 47.367 / 47.711 / 52.132 / 51.213 ms` | `+3.444%` |
 | `_OP_CAT3` peephole for three-part string-concat chains when the first binary `+` is provably string-producing | retained PGO+LTO head `17.984 / 52.483 / 74.219 ms` | clean retry: `18.307 / 51.626 / 73.828 ms` (`+0.639%` by total); confirmation promoted: `18.466 / 51.954 / 73.821 ms` | `+0.308%` |
 | Leave one spare initial slot for non-empty table literals when emitting `_OP_NEWOBJ` capacities | retained PGO+LTO head `17.911 / 52.846 / 74.299 ms` | clean retry: `18.134 / 52.244 / 74.191 ms` (`+0.336%` by total); confirmation promoted: `17.984 / 52.483 / 74.219 ms` | `+0.255%` |
 | Grow the global `SQStringTable` before `Concat()` / `Add()` insertions once it reaches a 75% load factor | retained PGO+LTO head `18.331 / 52.681 / 75.520 ms` | clean retry: `18.089 / 53.498 / 74.630 ms` (`+0.215%` by total); confirmation promoted: `17.911 / 52.846 / 74.299 ms` | `+1.007%` |

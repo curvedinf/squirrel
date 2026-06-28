@@ -674,7 +674,11 @@ SQString *SQStringTable::Add(const SQChar *news,SQInteger len)
 {
     if(len<0)
         len = (SQInteger)scstrlen(news);
-    SQHash newhash = ::_hashstr(news,len);
+    return AddWithHash(news, len, ::_hashstr(news, len));
+}
+
+SQString *SQStringTable::AddWithHash(const SQChar *news,SQInteger len,SQHash newhash)
+{
     SQHash h = newhash&(_numofslots-1);
     SQString *s;
     for (s = _strings[h]; s; s = s->_next){

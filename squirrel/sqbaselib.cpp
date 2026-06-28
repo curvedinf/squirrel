@@ -13,6 +13,30 @@
 #include <stdarg.h>
 #include <ctype.h>
 
+static inline SQChar fast_lower_char(SQChar ch)
+{
+    if(ch >= _SC('A') && ch <= _SC('Z')) {
+        return (SQChar)(ch + (_SC('a') - _SC('A')));
+    }
+#ifdef SQUNICODE
+    return (SQChar)towlower(ch);
+#else
+    return (SQChar)tolower((unsigned char)ch);
+#endif
+}
+
+static inline SQChar fast_upper_char(SQChar ch)
+{
+    if(ch >= _SC('a') && ch <= _SC('z')) {
+        return (SQChar)(ch - (_SC('a') - _SC('A')));
+    }
+#ifdef SQUNICODE
+    return (SQChar)towupper(ch);
+#else
+    return (SQChar)toupper((unsigned char)ch);
+#endif
+}
+
 static bool str2num(const SQChar *s,SQObjectPtr &res,SQInteger base)
 {
     SQChar *end;
@@ -1106,28 +1130,40 @@ static SQInteger string_find(HSQUIRRELVM v)
     return sq_throwerror(v,_SC("invalid param"));
 }
 
-#define STRING_TOFUNCZ(func) static SQInteger string_##func(HSQUIRRELVM v) \
-{\
-    SQInteger sidx,eidx; \
-    SQObjectPtr str; \
-    if(SQ_FAILED(get_slice_params(v,sidx,eidx,str)))return -1; \
-    SQInteger slen = _string(str)->_len; \
-    if(sidx < 0)sidx = slen + sidx; \
-    if(eidx < 0)eidx = slen + eidx; \
-    if(eidx < sidx) return sq_throwerror(v,_SC("wrong indexes")); \
-    if(eidx > slen || sidx < 0) return sq_throwerror(v,_SC("slice out of range")); \
-    SQInteger len=_string(str)->_len; \
-    const SQChar *sthis=_stringval(str); \
-    SQChar *snew=(_ss(v)->GetScratchPad(sq_rsl(len))); \
-    memcpy(snew,sthis,sq_rsl(len));\
-    for(SQInteger i=sidx;i<eidx;i++) snew[i] = func(sthis[i]); \
-    v->Push(SQString::Create(_ss(v),snew,len)); \
-    return 1; \
+static SQInteger string_case_map(HSQUIRRELVM v, SQChar (*map_char)(SQChar))
+{
+    SQInteger sidx,eidx;
+    SQObjectPtr str;
+    if(SQ_FAILED(get_slice_params(v,sidx,eidx,str))) return -1;
+    SQInteger slen = _string(str)->_len;
+    if(sidx < 0) sidx = slen + sidx;
+    if(eidx < 0) eidx = slen + eidx;
+    if(eidx < sidx) return sq_throwerror(v,_SC("wrong indexes"));
+    if(eidx > slen || sidx < 0) return sq_throwerror(v,_SC("slice out of range"));
+
+    const SQChar *sthis = _stringval(str);
+    SQChar *snew = (_ss(v)->GetScratchPad(sq_rsl(slen)));
+    memcpy(snew, sthis, sq_rsl(slen));
+    for(SQInteger i = sidx; i < eidx; i++) {
+        snew[i] = map_char(sthis[i]);
+    }
+    if(memcmp(snew, sthis, sq_rsl(slen)) == 0) {
+        v->Push(str);
+        return 1;
+    }
+    v->Push(_ss(v)->_stringtable->AddWithHash(snew, slen, _hashstr(snew, slen)));
+    return 1;
 }
 
+static SQInteger string_tolower(HSQUIRRELVM v)
+{
+    return string_case_map(v, fast_lower_char);
+}
 
-STRING_TOFUNCZ(tolower)
-STRING_TOFUNCZ(toupper)
+static SQInteger string_toupper(HSQUIRRELVM v)
+{
+    return string_case_map(v, fast_upper_char);
+}
 
 const SQRegFunction SQSharedState::_string_default_delegate_funcz[]={
     {_SC("len"),default_delegate_len,1, _SC("s"), SQ_NCI_DEFAULT_LEN},
