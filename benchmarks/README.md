@@ -8,7 +8,7 @@ The runner is `sqbench` and exposes separate compile and run phases:
 cmake -S . -B build
 cmake --build build -j
 ./build/bin/sqbench --compile-repeat 5 --run-repeat 25 benchmarks/workloads/registry_catalog.nut 500
-./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/world_map_graph.nut 24 18 12
+./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/world_map_graph.nut 30 18 12
 ./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/inventory_flow.nut 2200 11
 ./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/session_context_flow.nut 450 12
 ./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/scenario_tick_flow.nut 10200 24 14
