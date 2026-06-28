@@ -1695,7 +1695,6 @@ bool SQVM::CallNative(SQNativeClosure *nclosure, SQInteger nargs, SQInteger newb
 bool SQVM::TailCall(SQClosure *closure, SQInteger parambase,SQInteger nparams)
 {
 	SQInteger last_top = _top;
-	SQObjectPtr clo = closure;
 	if (ci->_root)
 	{
 		Raise_Error("root calls cannot invoke tailcalls");
