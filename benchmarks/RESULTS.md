@@ -14,29 +14,43 @@ Policy:
 Use this for the next candidate unless a newer retained result is promoted.
 
 Date: `2026-06-28`
-Build: `./build-pgo-lto-prepcallfast/bin/sqbench`
+Build: `./build-pgo-lto-logicmove/bin/sqbench`
 CPU pinning: `taskset -c 2`
 Command set:
 
 ```bash
-taskset -c 2 ./build-pgo-lto-prepcallfast/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/registry_catalog.nut 500
-taskset -c 2 ./build-pgo-lto-prepcallfast/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/world_map_graph.nut 30 18 12
-taskset -c 2 ./build-pgo-lto-prepcallfast/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/inventory_flow.nut 2200 11
-taskset -c 2 ./build-pgo-lto-prepcallfast/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/session_context_flow.nut 450 12
-taskset -c 2 ./build-pgo-lto-prepcallfast/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/scenario_tick_flow.nut 10200 24 14
-taskset -c 2 ./build-pgo-lto-prepcallfast/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/volume_presence_scan.nut 650 6 12 6
+taskset -c 2 ./build-pgo-lto-logicmove/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/registry_catalog.nut 500
+taskset -c 2 ./build-pgo-lto-logicmove/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/world_map_graph.nut 30 18 12
+taskset -c 2 ./build-pgo-lto-logicmove/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/inventory_flow.nut 2200 11
+taskset -c 2 ./build-pgo-lto-logicmove/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/session_context_flow.nut 450 12
+taskset -c 2 ./build-pgo-lto-logicmove/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/scenario_tick_flow.nut 10200 24 14
+taskset -c 2 ./build-pgo-lto-logicmove/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/volume_presence_scan.nut 650 6 12 6
 ```
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
-| `registry_catalog` | `46.134` | `2019808` |
-| `world_map_graph` | `49.598` | `325170` |
-| `inventory_flow` | `45.304` | `580946` |
-| `session_context_flow` | `44.636` | `593415` |
-| `scenario_tick_flow` | `48.790` | `2030324` |
-| `volume_presence_scan` | `50.238` | `308206` |
+| `registry_catalog` | `45.312` | `2019808` |
+| `world_map_graph` | `47.475` | `325170` |
+| `inventory_flow` | `45.072` | `580946` |
+| `session_context_flow` | `43.461` | `593415` |
+| `scenario_tick_flow` | `51.875` | `2030324` |
+| `volume_presence_scan` | `48.152` | `308206` |
 
-This retained head keeps the one-entry shared-state `string.slice` result cache and adds a direct one-argument default-delegate natclosure fast path in `_OP_PREPCALLK` before generic `CallNative()` setup. After direct method-call probes for `len`, `tostring`, `tointeger`, and `tofloat`, six-workload source checksum smoke in both orders (`372.041 ms` versus `399.262 ms`, then `380.079 ms` versus `396.446 ms`), identical `samples/class.nut` and `samples/generators.nut` output against the retained source interpreter, fresh PGO+LTO retraining, and two clean pinned long-suite control pairs against the previous retained build (`285.478 ms` versus `287.721 ms`, then `284.700 ms` versus `287.802 ms`), the authoritative six-workload retained baseline is `284.700 ms` total. This promoted retained head is `1.394 ms` (`+0.487%`) faster than the previous authoritative retained baseline of `286.094 ms`. Earlier baseline sections below are preserved for history.
+This retained head keeps the one-entry shared-state `string.slice` result cache, the `_OP_PREPCALLK` one-argument default-delegate natclosure fast path, and now lets safe result-producing opcodes retarget directly into the merged target on the right-hand side of short-circuit `||` / `&&` expressions, cutting emitted `MOVE` opcodes across the six benchmark workloads from `450` to `253`. After six-workload source checksum smoke in both orders (`361.698 ms` versus `373.320 ms`, then `368.975 ms` versus `373.509 ms`), identical custom short-circuit/method-call probe output plus identical `samples/class.nut` and `samples/generators.nut` output on both the source and PGO interpreters, fresh PGO+LTO retraining, and two clean pinned long-suite control pairs against the previous retained build (`278.499 ms` versus `285.453 ms`, then `281.347 ms` versus `285.327 ms`), the authoritative six-workload retained baseline is `281.347 ms` total. This promoted retained head is `3.353 ms` (`+1.178%`) faster than the previous authoritative retained baseline of `284.700 ms`. Earlier baseline sections below are preserved for history.
+
+### Rejected on current retained head `281.347 ms`
+
+No retries recorded yet on this retained head.
+
+### Rejected on immediate prior retained head `284.700 ms`
+
+These retries were run against the prior six-workload retained head after the `_OP_PREPCALLK` one-argument default-delegate natclosure fast path promotion.
+
+| Change | Frozen baseline | Retry results | Outcome |
+| --- | --- | --- | --- |
+| No-op fast returns in generic `SQObjectPtr` assignment operators and ref/scalar assignment macros, skipping addref/release when the destination already holds the same value | all six source checksums still matched; first full-suite source pass moved from control `61.066 / 64.689 / 59.174 / 59.868 / 62.250 / 73.650 ms` (`380.697 ms` total) to candidate `67.644 / 67.547 / 65.046 / 63.309 / 68.738 / 71.466 ms` (`403.750 ms` total) | rejected during source smoke before a pinned PGO retry, with the largest losses in `registry_catalog` (`+6.578 ms`) and `scenario_tick_flow` (`+6.488 ms`) | rolled back |
+| Split out a narrower `_OP_PREPCALLK` one-argument default-delegate intrinsic helper to avoid the generic `TryFastCallNative()` stack/self setup on successful fast calls | all six source checksums still matched; first full-suite source pass improved from control `60.636 / 63.924 / 66.962 / 60.029 / 62.210 / 65.665 ms` (`379.426 ms` total) to candidate `62.947 / 64.249 / 61.891 / 58.280 / 61.370 / 66.344 ms` (`375.081 ms`, `+1.145%`) | reverse-order confirmation lost overall at candidate `63.357 / 63.845 / 61.174 / 57.276 / 62.908 / 66.941 ms` (`375.501 ms`) versus reverse control `60.428 / 63.719 / 60.883 / 60.961 / 62.376 / 64.900 ms` (`373.267 ms`, `-0.599%`) | rolled back; not stable enough to promote |
+| Skip the second direct string-key member probe in `Get()` after `_OP_GETK` / `_OP_PREPCALLK` already missed the same table/class/instance slot | delegate/metamethod fallback probe stayed clean; first source pair improved from control `61.508 / 64.304 / 60.777 / 64.544 / 62.256 / 65.532 ms` (`378.921 ms`) to candidate `59.404 / 63.251 / 60.819 / 57.156 / 61.196 / 66.871 ms` (`368.697 ms`, `+2.698%`), and reverse-order source confirmation also stayed ahead at candidate `59.796 / 63.325 / 60.279 / 59.287 / 61.465 / 66.030 ms` (`370.182 ms`) versus reverse control `62.754 / 69.488 / 61.375 / 59.994 / 61.960 / 65.376 ms` (`380.947 ms`, `+2.826%`) | fresh PGO+LTO gave noisy focused reruns, but both clean full-suite long pairs still lost overall: first pair `291.830 ms` versus `286.681 ms` (`-1.796%`), reverse-order confirmation `288.374 ms` versus `286.496 ms` (`-0.655%`) | rolled back; strong source-only win did not survive PGO |
 
 ### Rejected on immediate prior retained head `286.094 ms`
 
@@ -83,6 +97,22 @@ These retries were run directly against the previous six-workload retained head 
 ## Historical Reference Baselines
 
 ### Immediate Prior Six-Workload Retained-Head Baseline
+
+Date: `2026-06-28`
+Build: `./build-pgo-lto-prepcallfast/bin/sqbench`
+
+| Workload | run_avg_ms | checksum |
+| --- | ---: | ---: |
+| `registry_catalog` | `46.134` | `2019808` |
+| `world_map_graph` | `49.598` | `325170` |
+| `inventory_flow` | `45.304` | `580946` |
+| `session_context_flow` | `44.636` | `593415` |
+| `scenario_tick_flow` | `48.790` | `2030324` |
+| `volume_presence_scan` | `50.238` | `308206` |
+
+This was the retained head before the short-circuit `||` / `&&` target-retargeting promotion. Its authoritative six-workload total was `284.700 ms`.
+
+### Earlier Prior Six-Workload Retained-Head Baseline
 
 Date: `2026-06-28`
 Build: `./build-pgo-lto-slicecache/bin/sqbench`

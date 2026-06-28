@@ -568,8 +568,34 @@ void SQFuncState::AddInstruction(SQInstruction &i)
             break;
         case _OP_MOVE:
             switch(pi.op) {
-            case _OP_GET: case _OP_ADD: case _OP_CAT3: case _OP_SUB: case _OP_MUL: case _OP_DIV: case _OP_MOD: case _OP_BITW:
-            case _OP_LOADINT: case _OP_LOADFLOAT: case _OP_LOADBOOL: case _OP_LOAD:
+            case _OP_GET:
+            case _OP_GETK:
+            case _OP_ADD:
+            case _OP_CAT3:
+            case _OP_SUB:
+            case _OP_MUL:
+            case _OP_DIV:
+            case _OP_MOD:
+            case _OP_BITW:
+            case _OP_LOADINT:
+            case _OP_LOADFLOAT:
+            case _OP_LOADBOOL:
+            case _OP_LOAD:
+            case _OP_CALL:
+            case _OP_LOADROOT:
+            case _OP_GETOUTER:
+            case _OP_NEWOBJ:
+            case _OP_CMP:
+            case _OP_EQ:
+            case _OP_NE:
+            case _OP_EXISTS:
+            case _OP_INSTANCEOF:
+            case _OP_NEG:
+            case _OP_NOT:
+            case _OP_BWNOT:
+            case _OP_CLOSURE:
+            case _OP_CLONE:
+            case _OP_TYPEOF:
 
                 if(pi._arg0 == i._arg1)
                 {

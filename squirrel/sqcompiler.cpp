@@ -480,7 +480,6 @@ public:
             SQInteger jpos = _fs->GetCurrentPos();
             if(trg != first_exp) _fs->AddInstruction(_OP_MOVE, trg, first_exp);
             Lex(); INVOKE_EXP(&SQCompiler::LogicalOrExp);
-            _fs->SnoozeOpt();
             SQInteger second_exp = _fs->PopTarget();
             if(trg != second_exp) _fs->AddInstruction(_OP_MOVE, trg, second_exp);
             _fs->SnoozeOpt();
@@ -500,7 +499,6 @@ public:
             SQInteger jpos = _fs->GetCurrentPos();
             if(trg != first_exp) _fs->AddInstruction(_OP_MOVE, trg, first_exp);
             Lex(); INVOKE_EXP(&SQCompiler::LogicalAndExp);
-            _fs->SnoozeOpt();
             SQInteger second_exp = _fs->PopTarget();
             if(trg != second_exp) _fs->AddInstruction(_OP_MOVE, trg, second_exp);
             _fs->SnoozeOpt();
