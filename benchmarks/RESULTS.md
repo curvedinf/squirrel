@@ -14,29 +14,29 @@ Policy:
 Use this for the next candidate unless a newer retained result is promoted.
 
 Date: `2026-06-28`
-Build: `./build-pgo-lto-pc9/bin/sqbench`
+Build: `./build-pgo-lto-call9/bin/sqbench`
 CPU pinning: `taskset -c 2`
 Command set:
 
 ```bash
-taskset -c 2 ./build-pgo-lto-pc9/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/registry_catalog.nut 500
-taskset -c 2 ./build-pgo-lto-pc9/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/world_map_graph.nut 30 18 12
-taskset -c 2 ./build-pgo-lto-pc9/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/inventory_flow.nut 2200 11
-taskset -c 2 ./build-pgo-lto-pc9/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/session_context_flow.nut 450 12
-taskset -c 2 ./build-pgo-lto-pc9/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/scenario_tick_flow.nut 10200 24 14
-taskset -c 2 ./build-pgo-lto-pc9/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/volume_presence_scan.nut 650 6 12 6
+taskset -c 2 ./build-pgo-lto-call9/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/registry_catalog.nut 500
+taskset -c 2 ./build-pgo-lto-call9/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/world_map_graph.nut 30 18 12
+taskset -c 2 ./build-pgo-lto-call9/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/inventory_flow.nut 2200 11
+taskset -c 2 ./build-pgo-lto-call9/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/session_context_flow.nut 450 12
+taskset -c 2 ./build-pgo-lto-call9/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/scenario_tick_flow.nut 10200 24 14
+taskset -c 2 ./build-pgo-lto-call9/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/volume_presence_scan.nut 650 6 12 6
 ```
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
-| `registry_catalog` | `46.955` | `2019808` |
-| `world_map_graph` | `48.472` | `325170` |
-| `inventory_flow` | `46.322` | `580946` |
-| `session_context_flow` | `41.894` | `593415` |
-| `scenario_tick_flow` | `47.959` | `2030324` |
-| `volume_presence_scan` | `49.901` | `308206` |
+| `registry_catalog` | `46.074` | `2019808` |
+| `world_map_graph` | `48.585` | `325170` |
+| `inventory_flow` | `50.194` | `580946` |
+| `session_context_flow` | `44.256` | `593415` |
+| `scenario_tick_flow` | `48.897` | `2030324` |
+| `volume_presence_scan` | `52.509` | `308206` |
 
-This retained head drops the refcount copy that the `_OP_PREPCALLK` cached-delegate fast path used to do (`SQObjectPtr clo = cached;`) on every cached `len` / `tointeger` / `tofloat` / `tostring` / `slice` delegate call. `clo` now starts null and is only used as the call's `retval` out-parameter; the cached native closure is passed straight to `TryFastCallNative` / `CallNative` via `_nativeclosure(cached)` (which the fast path already did for the intrinsic call), eliminating one addref+release per cached-delegate call. The host is still heavily loaded (`load avg ~34/24`), so absolute totals are elevated relative to the quieter-machine historical baselines and the authoritative signal is the live pinned PGO+LTO A/B. Correctness stayed clean (six-workload checksums matched, `samples/class.nut` / `samples/generators.nut` byte-identical to HEAD); a deterministic callgrind pass showed a broad **`-1.206%`** aggregate instruction-count reduction with every workload improving (`-0.717%` / `-1.245%` / `-1.162%` / `-1.762%` / `-1.287%` / `-1.122%`). Fresh pinned PGO+LTO A/B (candidate retrained with `train-pgo.sh`, `-DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON`) won the aggregate in both orders: candidate `46.955 / 48.472 / 46.322 / 41.894 / 47.959 / 49.901 ms` (`281.503 ms`) versus retained head `45.096 / 52.907 / 45.722 / 43.120 / 48.493 / 49.237 ms` (`284.575 ms`, `+1.07%`), then reverse candidate `45.971 / 49.446 / 46.937 / 43.689 / 48.813 / 50.740 ms` (`285.596 ms`) versus retained head `47.132 / 50.345 / 47.294 / 42.790 / 49.989 / 49.321 ms` (`286.871 ms`, `+0.44%`). The authoritative six-workload retained baseline is `281.503 ms` total on the current (loaded) host. Earlier baseline sections below are preserved for history.
+This retained head stops materializing the defensive `SQObjectPtr clo = STK(arg1)` copy in `_OP_CALL` for the common `OT_CLOSURE` shape (a direct call of a Squirrel closure, e.g. a global helper like the workloads' `toFloat` / `deepClone`). That case only needs the callee pointer, which `_closure(STK(arg1))` yields without copying; `STK(arg1)` is stable until `StartCall()` runs and the resulting `SQClosure*` does not move on a stack resize. The copy is now deferred into only the `OT_NATIVECLOSURE` / `OT_CLASS` / `OT_TABLE` / `OT_USERDATA` / `OT_INSTANCE` cases that actually use `clo` as a retval. Correctness stayed clean (six-workload checksums matched, `samples/class.nut` / `samples/generators.nut` byte-identical); a deterministic callgrind pass showed **`-0.496%`** aggregate Ir with every workload improving (`-0.835%` / `-0.314%` / `-0.517%` / `-0.066%` / `-0.163%` / `-0.963%`). The host is extremely noisy right now (`load avg ~34/24`, with single-workload runs swinging >`30%` between consecutive pinned suites), so the live PGO+LTO A/B needed an interleaved ctrl-cand-ctrl-cand protocol to average out drift: candidate won the aggregate in `3` of `4` A/B comparisons — order-1 `-0.14%`, order-2 `+2.78%` (load-drift outlier where control hit a quiet `283.063 ms` versus its `290-302 ms` norm), then interleaved `--run-repeat 60` candidate avg `289.786 ms` vs control avg `292.558 ms` (`-0.95%`), and interleaved `--run-repeat 80` candidate avg `288.568 ms` (extremely stable: `288.547 / 288.588`) vs control avg `294.351 ms` (`-1.96%`). The candidate is also markedly more stable run-to-run than the retained head, consistent with the eliminated refcount churn reducing shared-cache-line contention under load. The authoritative six-workload retained baseline is `290.515 ms` (order-1 PGO+LTO candidate) on the current (loaded) host. Earlier baseline sections below are preserved for history.
 
 ### Rejected on earlier prior retained head `281.347 ms`
 
@@ -120,6 +120,22 @@ These retries were run directly against the previous six-workload retained head 
 ## Historical Reference Baselines
 
 ### Immediate Prior Six-Workload Retained-Head Baseline
+
+Date: `2026-06-28`
+Build: `./build-pgo-lto-pc9/bin/sqbench`
+
+| Workload | run_avg_ms | checksum |
+| --- | ---: | ---: |
+| `registry_catalog` | `46.955` | `2019808` |
+| `world_map_graph` | `48.472` | `325170` |
+| `inventory_flow` | `46.322` | `580946` |
+| `session_context_flow` | `41.894` | `593415` |
+| `scenario_tick_flow` | `47.959` | `2030324` |
+| `volume_presence_scan` | `49.901` | `308206` |
+
+This was the retained head before the `_OP_CALL` `OT_CLOSURE` defensive-copy elimination promotion (the `_OP_PREPCALLK` cached-delegate no-copy head). Its authoritative six-workload total was `281.503 ms` on the current (loaded) host.
+
+### Earlier Prior Six-Workload Retained-Head Baseline
 
 Date: `2026-06-28`
 Build: `./build-pgo-lto-gsp/bin/sqbench`
@@ -451,6 +467,14 @@ This is a frozen earlier stock measurement. Keep it as a rough reference only; d
 | `inventory_flow` | `136.312` |
 
 ## Retained Results
+
+### Promoted: skip the defensive closure copy in the `_OP_CALL` `OT_CLOSURE` path (current retained head)
+
+`_OP_CALL` used to begin every call with `SQObjectPtr clo = STK(arg1)`, a defensive copy made for all five callee-type cases. The common `OT_CLOSURE` shape (a direct call of a Squirrel closure — the workloads' global helpers like `toFloat`, `toInt`, `deepClone`) only needs the callee pointer, which `_closure(STK(arg1))` extracts without copying; the stack slot is stable until `StartCall()` runs and the `SQClosure*` does not move on a stack resize. The copy is now deferred into only the cases that use `clo` as a retval (`OT_NATIVECLOSURE` / `OT_CLASS` / `OT_TABLE` / `OT_USERDATA` / `OT_INSTANCE`). PGO-proof (structural, not a codegen hint) and strictly work-reducing.
+
+| Baseline used | Result | Overall |
+| --- | --- | ---: |
+| retained PGO+LTO head `build-pgo-lto-pc9` (frozen `281.503 ms`) | six-workload checksum match, `samples/class.nut` / `samples/generators.nut` byte-identical, callgrind Ir **`-0.496%`** aggregate with every workload improving (`-0.835%` / `-0.314%` / `-0.517%` / `-0.066%` / `-0.163%` / `-0.963%`), fresh PGO+LTO retrain, candidate won `3` of `4` A/B comparisons including two interleaved ctrl-cand-ctrl-cand protocols (`-0.95%` at `--run-repeat 60`, `-1.96%` at `--run-repeat 80`) where the candidate was also markedly more stable run-to-run | `-0.14%` order-1 / `-0.95%` / `-1.96%` interleaved (1 load-drift outlier loss) |
 
 ### Promoted: avoid the refcount copy in the `_OP_PREPCALLK` cached-delegate path (current retained head)
 

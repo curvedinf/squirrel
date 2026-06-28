@@ -1,0 +1,1 @@
+/usr/bin/cc -O3 -DNDEBUG -fno-semantic-interposition CMakeFiles/sq.dir/sq.c.o -o ../bin/sq  -Wl,-rpath,/home/chase/Projects/squirrel/build-retained-source/lib: ../lib/libsqstdlib.so.0.0.0 ../lib/libsquirrel.so.0.0.0 

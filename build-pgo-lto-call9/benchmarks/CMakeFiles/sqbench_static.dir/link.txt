@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -flto=auto -fno-fat-lto-objects -fprofile-use=/home/chase/Projects/squirrel/build-pgo-lto-call9/pgo-data -fprofile-correction -fno-semantic-interposition CMakeFiles/sqbench_static.dir/sqbench.c.o -o ../bin/sqbench_static  ../lib/libsquirrel_static.a ../lib/libsqstdlib_static.a 
