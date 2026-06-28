@@ -1,6 +1,12 @@
 # Folders created at compilation
 bin/
 lib/
+build/
+build-*/
+callgrind*.out
+perf.*
+*.gcda
+*.gcno
 
 # Folders created at documentation generation
 doc/build/

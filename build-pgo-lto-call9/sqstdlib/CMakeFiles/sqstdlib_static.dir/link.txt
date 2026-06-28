@@ -1,2 +1,0 @@
-"/usr/bin/gcc-ar-13" cr ../lib/libsqstdlib_static.a CMakeFiles/sqstdlib_static.dir/sqstdaux.cpp.o CMakeFiles/sqstdlib_static.dir/sqstdblob.cpp.o CMakeFiles/sqstdlib_static.dir/sqstdio.cpp.o CMakeFiles/sqstdlib_static.dir/sqstdmath.cpp.o CMakeFiles/sqstdlib_static.dir/sqstdrex.cpp.o CMakeFiles/sqstdlib_static.dir/sqstdstream.cpp.o CMakeFiles/sqstdlib_static.dir/sqstdstring.cpp.o CMakeFiles/sqstdlib_static.dir/sqstdsystem.cpp.o
-"/usr/bin/gcc-ranlib-13" ../lib/libsqstdlib_static.a

@@ -1,1 +1,0 @@
-/usr/bin/cc -O2 -g -DNDEBUG -fno-semantic-interposition CMakeFiles/sqbench.dir/sqbench.c.o -o ../bin/sqbench  -Wl,-rpath,/home/chase/Projects/squirrel/build-prof/lib ../lib/libsqstdlib.so.0.0.0 ../lib/libsquirrel.so.0.0.0 

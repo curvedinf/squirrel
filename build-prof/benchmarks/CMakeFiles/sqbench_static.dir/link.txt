@@ -1,1 +1,0 @@
-/usr/bin/c++ -O2 -g -DNDEBUG -fno-semantic-interposition CMakeFiles/sqbench_static.dir/sqbench.c.o -o ../bin/sqbench_static  ../lib/libsquirrel_static.a ../lib/libsqstdlib_static.a 
