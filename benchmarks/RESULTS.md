@@ -282,6 +282,16 @@ This older retained PGO snapshot predates the retained `-fno-semantic-interposit
 
 These candidates were benchmark-negative or otherwise not retained.
 
+### Re-evaluated against retained head `18.466 / 51.954 / 73.821 ms`
+
+These retries were run after retaining the `_OP_CAT3` three-part string-concat chain change.
+
+| Change | Frozen baseline | Retry results | Outcome |
+| --- | --- | --- | --- |
+| Skip `TryFastCallNative()` entirely for non-intrinsic native closures with `SQ_NCI_NONE` | `18.466 / 51.954 / 73.821 ms` | rejected during smoke before a pinned run: source smoke was `22.256 / 65.581 / 91.678 ms` with matching checksums, which lost clear ground on `registry_catalog` and `world_map_graph` versus the retained source behavior | rolled back |
+| Raise comparator-driven `array.sort()` small-array insertion cutoff to 48 elements before quicksort | `18.466 / 51.954 / 73.821 ms` | rejected during smoke before a pinned run: source smoke was `22.012 / 62.812 / 97.662 ms` with matching checksums, targeted sort behavior stayed correct across 48/49-element callback sorts plus resize-during-compare failure, but `inventory_flow` regressed too hard to justify a pinned run | rolled back |
+| Direct type-dispatch for `array.sort()` comparator return values instead of generic numeric/bool conversion helpers | `18.466 / 51.954 / 73.821 ms` | rejected during smoke before a pinned run: source smoke was `24.311 / 67.471 / 100.603 ms` with matching checksums, targeted sort behavior stayed correct for integer, float, bool, and resize-during-compare cases, but the broad workload picture was clearly negative before a pinned retry | rolled back |
+
 ### Re-evaluated against retained head `17.984 / 52.483 / 74.219 ms`
 
 These retries were run after retaining the non-empty table-literal spare-slot sizing change.

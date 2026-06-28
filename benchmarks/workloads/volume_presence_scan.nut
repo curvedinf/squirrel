@@ -243,7 +243,7 @@ local VolumePresenceBench = {
 };
 
 function main() {
-	return VolumePresenceBench.run(argInt(0, 600), argInt(1, 6), argInt(2, 12), argInt(3, 6));
+	return VolumePresenceBench.run(argInt(0, 650), argInt(1, 6), argInt(2, 12), argInt(3, 6));
 }
 
 return main();

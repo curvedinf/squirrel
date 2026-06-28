@@ -429,7 +429,7 @@ function buildCatalog(rounds) {
 }
 
 function main() {
-	return buildCatalog(argInt(0, 180));
+	return buildCatalog(argInt(0, 500));
 }
 
 return main();

@@ -276,7 +276,7 @@ local SessionContextBench = {
 };
 
 function main() {
-	return SessionContextBench.run(argInt(0, 600), argInt(1, 12));
+	return SessionContextBench.run(argInt(0, 450), argInt(1, 12));
 }
 
 return main();

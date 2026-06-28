@@ -432,7 +432,7 @@ local ScenarioTickBench = {
 };
 
 function main() {
-	return ScenarioTickBench.run(argInt(0, 3200), argInt(1, 24), argInt(2, 14));
+	return ScenarioTickBench.run(argInt(0, 10200), argInt(1, 24), argInt(2, 14));
 }
 
 return main();

@@ -557,7 +557,7 @@ function runInventoryFlow(mission_count, query_stride) {
 }
 
 function main() {
-	return runInventoryFlow(argInt(0, 3200), argInt(1, 11));
+	return runInventoryFlow(argInt(0, 2200), argInt(1, 11));
 }
 
 return main();

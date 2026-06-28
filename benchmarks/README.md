@@ -7,12 +7,12 @@ The runner is `sqbench` and exposes separate compile and run phases:
 ```bash
 cmake -S . -B build
 cmake --build build -j
-./build/bin/sqbench --compile-repeat 5 --run-repeat 25 benchmarks/workloads/registry_catalog.nut
+./build/bin/sqbench --compile-repeat 5 --run-repeat 25 benchmarks/workloads/registry_catalog.nut 500
 ./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/world_map_graph.nut 24 18 12
-./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/inventory_flow.nut 3000 11
-./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/session_context_flow.nut 600 12
-./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/scenario_tick_flow.nut 3200 24 14
-./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/volume_presence_scan.nut 600 6 12 6
+./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/inventory_flow.nut 2200 11
+./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/session_context_flow.nut 450 12
+./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/scenario_tick_flow.nut 10200 24 14
+./build/bin/sqbench --compile-repeat 3 --run-repeat 10 benchmarks/workloads/volume_presence_scan.nut 650 6 12 6
 ```
 
 Profile-guided optimization is supported for GCC builds through `SQ_PGO_MODE`.
@@ -22,12 +22,12 @@ Additional CMake arguments can be passed after the build directory when a retain
 
 ```bash
 ./benchmarks/train-pgo.sh
-./build-pgo/bin/sqbench --compile-repeat 3 --run-repeat 20 benchmarks/workloads/registry_catalog.nut 180
+./build-pgo/bin/sqbench --compile-repeat 3 --run-repeat 20 benchmarks/workloads/registry_catalog.nut 500
 ./build-pgo/bin/sqbench --compile-repeat 3 --run-repeat 20 benchmarks/workloads/world_map_graph.nut 30 18 12
-./build-pgo/bin/sqbench --compile-repeat 3 --run-repeat 20 benchmarks/workloads/inventory_flow.nut 3200 11
-./build-pgo/bin/sqbench --compile-repeat 3 --run-repeat 20 benchmarks/workloads/session_context_flow.nut 600 12
-./build-pgo/bin/sqbench --compile-repeat 3 --run-repeat 20 benchmarks/workloads/scenario_tick_flow.nut 3200 24 14
-./build-pgo/bin/sqbench --compile-repeat 3 --run-repeat 20 benchmarks/workloads/volume_presence_scan.nut 600 6 12 6
+./build-pgo/bin/sqbench --compile-repeat 3 --run-repeat 20 benchmarks/workloads/inventory_flow.nut 2200 11
+./build-pgo/bin/sqbench --compile-repeat 3 --run-repeat 20 benchmarks/workloads/session_context_flow.nut 450 12
+./build-pgo/bin/sqbench --compile-repeat 3 --run-repeat 20 benchmarks/workloads/scenario_tick_flow.nut 10200 24 14
+./build-pgo/bin/sqbench --compile-repeat 3 --run-repeat 20 benchmarks/workloads/volume_presence_scan.nut 650 6 12 6
 ```
 
 Workloads:
