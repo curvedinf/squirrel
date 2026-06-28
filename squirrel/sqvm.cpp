@@ -1171,7 +1171,7 @@ exception_restore:
                                 SQObjectPtr &cached = _sharedstate->_fast_delegate_methods[fasttype][fastkey];
                                 if(sq_type(cached) == OT_NATIVECLOSURE) {
                                     SQInteger calltarget = (SQInteger)*((const signed char *)&nexti._arg0);
-                                    SQObjectPtr clo = cached;
+                                    SQObjectPtr clo;
                                     STK(arg3) = o;
                                     ci->_ip++;
                                     if(nexti._arg3 == 1) {
@@ -1190,7 +1190,7 @@ exception_restore:
                                     }
                                     bool suspend;
                                     bool tailcall;
-                                    _GUARD(CallNative(_nativeclosure(clo), nexti._arg3, _stackbase + nexti._arg2, clo, (SQInt32)calltarget, suspend, tailcall));
+                                    _GUARD(CallNative(_nativeclosure(cached), nexti._arg3, _stackbase + nexti._arg2, clo, (SQInt32)calltarget, suspend, tailcall));
                                     if(suspend){
                                         _suspended = SQTrue;
                                         _suspended_target = calltarget;
