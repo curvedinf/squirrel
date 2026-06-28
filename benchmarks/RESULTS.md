@@ -26,15 +26,28 @@ taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benc
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
-| `registry_catalog` | `18.690` | `727105` |
-| `world_map_graph` | `52.478` | `325170` |
-| `inventory_flow` | `76.664` | `812233` |
+| `registry_catalog` | `18.331` | `727105` |
+| `world_map_graph` | `52.681` | `325170` |
+| `inventory_flow` | `75.520` | `812233` |
 
-This baseline came from retaining empty-string fast paths in `SQVM::StringCat()` over the prior retained head of `18.804 / 52.961 / 76.832 ms`. The clean retry was `18.624 / 52.597 / 76.493 ms` (`+0.594%` overall), and the confirmation run promoted here was `18.690 / 52.478 / 76.664 ms` (`+0.515%` overall).
+This baseline came from retaining direct-result intrinsic conversions and primitive `tostring()` fast paths in `SQVM::TryFastCallNative()` over the prior retained head of `18.690 / 52.478 / 76.664 ms`. The clean retry was `18.729 / 52.893 / 75.289 ms` (`+0.623%` overall), and the confirmation run promoted here was `18.331 / 52.681 / 75.520 ms` (`+0.879%` overall).
 
 ## Historical Reference Baselines
 
 ### Immediate Prior Retained-Head Baseline
+
+Date: `2026-06-27`
+Build: `./build-pgo-lto/bin/sqbench`
+
+| Workload | run_avg_ms | checksum |
+| --- | ---: | ---: |
+| `registry_catalog` | `18.690` | `727105` |
+| `world_map_graph` | `52.478` | `325170` |
+| `inventory_flow` | `76.664` | `812233` |
+
+This was the retained head before the `SQVM::TryFastCallNative()` intrinsic result-path cleanup was promoted.
+
+### Earlier Prior Retained-Head Baseline
 
 Date: `2026-06-27`
 Build: `./build-pgo-lto/bin/sqbench`
@@ -193,6 +206,7 @@ Some earlier runs were kept before this ledger existed. Where exact per-workload
 
 | Change | Baseline used | Result | Overall |
 | --- | --- | --- | ---: |
+| Direct-result string conversions and primitive `tostring()` fast paths in `SQVM::TryFastCallNative()` | retained PGO+LTO head `18.690 / 52.478 / 76.664 ms` | clean retry: `18.729 / 52.893 / 75.289 ms`; confirmation promoted: `18.331 / 52.681 / 75.520 ms` | `+0.879%` |
 | Empty-string fast paths in `SQVM::StringCat()` | retained PGO+LTO head `18.804 / 52.961 / 76.832 ms` | clean retry: `18.624 / 52.597 / 76.493 ms`; confirmation promoted: `18.690 / 52.478 / 76.664 ms` | `+0.515%` |
 | Same-value fast paths in `SQObjectPtr::operator=(bool)` and `SQObjectPtr::Null()` | refreshed retained PGO+LTO head `19.633 / 54.329 / 79.579 ms` | clean retry: `19.100 / 54.267 / 78.035 ms` (`+1.393%`); confirmation promoted: `18.804 / 52.961 / 76.832 ms` | `+3.220%` |
 | Full-hash guard before `memcmp()` in `SQStringTable::Concat()` / `Add()` | refreshed retained PGO+LTO head `18.994 / 54.189 / 80.237 ms` | clean retry: `19.085 / 53.473 / 77.881 ms` (`+1.943%`); confirmation promoted: `19.302 / 53.996 / 79.207 ms` | `+0.596%` |
@@ -250,6 +264,16 @@ These retries were run after retaining same-value fast paths in `SQObjectPtr::op
 | Bypass `TranslateIndex()` in `array` / `string` / `table` `Next()` iteration | `18.804 / 52.961 / 76.832 ms` | initial retry: `18.468 / 53.054 / 76.916 ms` (`+0.107%` by total); confirmation retry: `18.836 / 54.375 / 77.671 ms` (`-1.538%` by total) | rolled back; not stable enough to promote |
 | Move return values directly out of callee/native frame slots when no open outer captures the source slot | `18.804 / 52.961 / 76.832 ms` | initial retry: `18.427 / 52.708 / 76.433 ms` (`+0.692%` by total); confirmation retry: `18.357 / 52.859 / 77.361 ms` (`+0.013%` by total); tie-break retry: `18.675 / 53.142 / 76.973 ms` (`-0.130%` by total) | rolled back; not stable enough to promote |
 | Direct pointer access to member-table values for class / instance `Get*` / `Set` / attribute lookup | `18.804 / 52.961 / 76.832 ms` | clean retry: `19.036 / 52.531 / 85.431 ms` (`-5.653%` by total) | rolled back |
+
+### Re-evaluated against retained head `18.690 / 52.478 / 76.664 ms`
+
+These retries were run after retaining empty-string fast paths in `SQVM::StringCat()`.
+
+| Change | Frozen baseline | Retry results | Outcome |
+| --- | --- | --- | --- |
+| Closure-specific `CallInfo::_closure` set/clear helpers for frame entry, teardown, and generator resume | `18.690 / 52.478 / 76.664 ms` | clean retry: `18.594 / 53.023 / 76.151 ms` (`+0.043%` by total; `world_map_graph` `-1.039%`) | rolled back; effectively neutral overall and regressed `world_map_graph` |
+| Move native return values out of native frame slots with `_Swap()` before `LeaveFrame()` | `18.690 / 52.478 / 76.664 ms` | clean retry: `18.331 / 53.145 / 76.888 ms` (`-0.360%` by total; `registry_catalog` `+1.921%`, `world_map_graph` `-1.271%`, `inventory_flow` `-0.292%`) | rolled back |
+| Reuse `Get()`'s string-key knowledge and cached fast-delegate key in `InvokeDefaultDelegate()` | `18.690 / 52.478 / 76.664 ms` | initial retry: `18.442 / 52.529 / 76.644 ms` (`+0.147%` by total); confirmation retry: `18.365 / 52.892 / 76.648 ms` (`-0.049%` by total) | rolled back; not stable enough to promote |
 
 ### Re-evaluated against retained head `18.994 / 54.189 / 80.237 ms`
 

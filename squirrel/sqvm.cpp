@@ -671,12 +671,13 @@ SQInteger SQVM::TryFastCallNative(SQNativeClosure *nclosure, SQInteger nargs, SQ
     case SQ_NCI_DEFAULT_TOFLOAT:
         switch(sq_type(self)) {
         case OT_STRING: {
-            SQObjectPtr parsed;
-            if(!FastStr2Num(_stringval(self), parsed, 10)) {
+            if(!FastStr2Num(_stringval(self), retval, 10)) {
                 Raise_Error(_SC("cannot convert the string"));
                 return -1;
             }
-            retval = SQObjectPtr(tofloat(parsed));
+            if(sq_type(retval) != OT_FLOAT) {
+                retval = SQObjectPtr(tofloat(retval));
+            }
             return 1;
         }
         case OT_INTEGER:
@@ -696,12 +697,13 @@ SQInteger SQVM::TryFastCallNative(SQNativeClosure *nclosure, SQInteger nargs, SQ
             if(nargs > 1) {
                 base = tointeger(_stack._vals[newbase + 1]);
             }
-            SQObjectPtr parsed;
-            if(!FastStr2Num(_stringval(self), parsed, base)) {
+            if(!FastStr2Num(_stringval(self), retval, base)) {
                 Raise_Error(_SC("cannot convert the string"));
                 return -1;
             }
-            retval = SQObjectPtr(tointeger(parsed));
+            if(sq_type(retval) != OT_INTEGER) {
+                retval = SQObjectPtr(tointeger(retval));
+            }
             return 1;
         }
         case OT_INTEGER:
@@ -715,6 +717,27 @@ SQInteger SQVM::TryFastCallNative(SQNativeClosure *nclosure, SQInteger nargs, SQ
             return 0;
         }
     case SQ_NCI_DEFAULT_TOSTRING:
+        switch(sq_type(self)) {
+        case OT_STRING:
+            retval = self;
+            return 1;
+        case OT_INTEGER: {
+            SQInteger n = _integer(self);
+            if(n >= SQSharedState::CACHED_TOSTRING_INT_MIN && n <= SQSharedState::CACHED_TOSTRING_INT_MAX) {
+                retval = _sharedstate->_cached_tostring_ints[n - SQSharedState::CACHED_TOSTRING_INT_MIN];
+                return 1;
+            }
+            break;
+        }
+        case OT_BOOL:
+            retval = _integer(self) ? _sharedstate->_cached_tostring_true : _sharedstate->_cached_tostring_false;
+            return 1;
+        case OT_NULL:
+            retval = _sharedstate->_cached_tostring_null;
+            return 1;
+        default:
+            break;
+        }
         return ToString(self, retval) ? 1 : -1;
     case SQ_NCI_STRING_SLICE:
         if(sq_type(self) == OT_STRING) {
