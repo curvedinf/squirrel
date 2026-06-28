@@ -1036,7 +1036,7 @@ public:
             }
         }
         if(separator == _SC(',')) //hack recognizes a table from the separator
-            _fs->SetInstructionParam(tpos, 1, nkeys);
+            _fs->SetInstructionParam(tpos, 1, nkeys > 0 ? nkeys + 1 : 0);
         Lex();
     }
     void LocalDeclStatement()

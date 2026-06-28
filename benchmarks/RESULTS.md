@@ -26,15 +26,28 @@ taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benc
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
-| `registry_catalog` | `17.911` | `727105` |
-| `world_map_graph` | `52.846` | `325170` |
-| `inventory_flow` | `74.299` | `812233` |
+| `registry_catalog` | `17.984` | `727105` |
+| `world_map_graph` | `52.483` | `325170` |
+| `inventory_flow` | `74.219` | `812233` |
 
-This baseline came from growing the global `SQStringTable` before `Concat()` / `Add()` insertions once the table reaches a 75% load factor, over the prior retained head of `18.331 / 52.681 / 75.520 ms`. The clean retry was `18.089 / 53.498 / 74.630 ms` (`+0.215%` overall), and the confirmation run promoted here was `17.911 / 52.846 / 74.299 ms` (`+1.007%` overall).
+This baseline came from leaving one spare initial slot for non-empty table literals when emitting `_OP_NEWOBJ` table capacities, over the prior retained head of `17.911 / 52.846 / 74.299 ms`. The clean retry was `18.134 / 52.244 / 74.191 ms` (`+0.336%` overall), and the confirmation run promoted here was `17.984 / 52.483 / 74.219 ms` (`+0.255%` overall).
 
 ## Historical Reference Baselines
 
 ### Immediate Prior Retained-Head Baseline
+
+Date: `2026-06-27`
+Build: `./build-pgo-lto/bin/sqbench`
+
+| Workload | run_avg_ms | checksum |
+| --- | ---: | ---: |
+| `registry_catalog` | `17.911` | `727105` |
+| `world_map_graph` | `52.846` | `325170` |
+| `inventory_flow` | `74.299` | `812233` |
+
+This was the retained head before the non-empty table-literal spare-slot sizing change was promoted.
+
+### Earlier Prior Retained-Head Baseline
 
 Date: `2026-06-27`
 Build: `./build-pgo-lto/bin/sqbench`
@@ -219,6 +232,7 @@ Some earlier runs were kept before this ledger existed. Where exact per-workload
 
 | Change | Baseline used | Result | Overall |
 | --- | --- | --- | ---: |
+| Leave one spare initial slot for non-empty table literals when emitting `_OP_NEWOBJ` capacities | retained PGO+LTO head `17.911 / 52.846 / 74.299 ms` | clean retry: `18.134 / 52.244 / 74.191 ms` (`+0.336%` by total); confirmation promoted: `17.984 / 52.483 / 74.219 ms` | `+0.255%` |
 | Grow the global `SQStringTable` before `Concat()` / `Add()` insertions once it reaches a 75% load factor | retained PGO+LTO head `18.331 / 52.681 / 75.520 ms` | clean retry: `18.089 / 53.498 / 74.630 ms` (`+0.215%` by total); confirmation promoted: `17.911 / 52.846 / 74.299 ms` | `+1.007%` |
 | Direct-result string conversions and primitive `tostring()` fast paths in `SQVM::TryFastCallNative()` | retained PGO+LTO head `18.690 / 52.478 / 76.664 ms` | clean retry: `18.729 / 52.893 / 75.289 ms`; confirmation promoted: `18.331 / 52.681 / 75.520 ms` | `+0.879%` |
 | Empty-string fast paths in `SQVM::StringCat()` | retained PGO+LTO head `18.804 / 52.961 / 76.832 ms` | clean retry: `18.624 / 52.597 / 76.493 ms`; confirmation promoted: `18.690 / 52.478 / 76.664 ms` | `+0.515%` |
@@ -253,6 +267,30 @@ This older retained PGO snapshot predates the retained `-fno-semantic-interposit
 ## Rolled Back Results
 
 These candidates were benchmark-negative or otherwise not retained.
+
+### Re-evaluated against retained head `17.911 / 52.846 / 74.299 ms`
+
+These retries were run after retaining the earlier-growth `SQStringTable` load-factor change.
+
+| Change | Frozen baseline | Retry results | Outcome |
+| --- | --- | --- | --- |
+| Non-recursive root-table fallback shortcut in `SQVM::Get()` when the closure root is a plain table with no delegate | `17.911 / 52.846 / 74.299 ms` | clean retry: `18.524 / 53.900 / 74.959 ms` (`-1.604%` by total) | rolled back |
+| Scalar fast path in `SQObjectPtr` copy assignment for non-refcounted values | `17.911 / 52.846 / 74.299 ms` | clean retry: `18.086 / 53.165 / 74.911 ms` (`-0.762%` by total) | rolled back |
+| Grow `SQTable` before `NewSlot()` insertions once it reaches a 75% load factor | `17.911 / 52.846 / 74.299 ms` | rejected during smoke before a pinned run: `registry_catalog` checksum still matched at `24.486 ms`, `world_map_graph` checksum still matched at `63.836 ms`, but `inventory_flow` changed from `812233` to `812226` at `91.862 ms` | rolled back; invalid semantics |
+| Same-scalar-type fast path in `SQObjectPtr` assignment for `integer` / `float` / `userpointer` / `bool` | `17.911 / 52.846 / 74.299 ms` | clean retry: `18.426 / 55.278 / 74.914 ms` (`-2.456%` by total) | rolled back |
+| `_Swap()` the displaced `SQTable::NewSlot()` collision node into the free slot instead of copy-plus-`Null()` | `17.911 / 52.846 / 74.299 ms` | clean retry: `17.914 / 63.396 / 74.785 ms` (`-7.610%` by total) | rolled back |
+| `SQDelegable::GetMetaMethod()` via `SQTable::GetStr()` for interned metamethod keys | `17.911 / 52.846 / 74.299 ms` | clean retry: `18.876 / 53.788 / 74.306 ms` (`-1.319%` by total) | rolled back |
+| Non-owning delegate-table object views in delegated `Get` / `Set` fallbacks | `17.911 / 52.846 / 74.299 ms` | clean retry: `18.303 / 64.865 / 76.134 ms` (`-9.821%` by total) | rolled back |
+| Checked intrinsic fast-call helper reused by cached `_OP_PREPCALLK` default-delegate native calls | `17.911 / 52.846 / 74.299 ms` | clean retry: `18.326 / 54.206 / 75.757 ms` (`-2.229%` by total) | rolled back |
+| Raw-pointer-first interned-string comparison in `SQTable::_GetStr()` | `17.911 / 52.846 / 74.299 ms` | clean retry: `18.769 / 54.990 / 77.281 ms` (`-4.125%` by total) | rolled back |
+| Length-gated fast delegate-key decoding with reused string pointers in cached/default delegate lookups | `17.911 / 52.846 / 74.299 ms` | clean retry: `18.502 / 54.141 / 76.144 ms` (`-2.572%` by total) | rolled back |
+| Literal-key peephole opcodes for `_OP_NEWSLOT` / `_OP_NEWSLOTA` to skip VM key loads | `17.911 / 52.846 / 74.299 ms` | source smoke beat the restored retained source head at `24.263 / 68.760 / 104.267 ms` vs `23.433 / 69.900 / 110.873 ms`, but the authoritative pinned PGO+LTO retry landed at `19.982 / 58.904 / 85.504 ms` (`-13.329%` by total) | rolled back |
+| Ownership-transfer `SQObjectPtr::MoveFrom()` in `CloseOuters()`, vararg packing, and generator resume | `17.911 / 52.846 / 74.299 ms` | source smoke improved to `21.923 / 62.665 / 91.799 ms` with matching checksums, but the authoritative pinned PGO+LTO retry landed at `17.831 / 52.733 / 75.015 ms` (`-0.361%` by total) | rolled back; `inventory_flow` regressed to `75.015 ms` despite matching checksums |
+| Precomputed `SQFunctionProto` flag to skip `CloseOuters()` for frames that cannot create captured locals | `17.911 / 52.846 / 74.299 ms` | source smoke improved to `21.869 / 64.223 / 93.731 ms` with matching checksums, but the authoritative pinned PGO+LTO retry landed at `18.248 / 54.769 / 76.363 ms` (`-2.981%` by total) | rolled back |
+| Decimal-prefix fast path in duplicated string-to-number helpers for base-10 `tointeger()` / `tofloat()` conversions | `17.911 / 52.846 / 74.299 ms` | source smoke stayed checksum-clean at `23.410 / 68.283 / 100.026 ms`, targeted conversion outputs matched the retained binary on decimal / exponent / overflow edge cases, but the authoritative pinned PGO+LTO retry landed at `18.223 / 52.928 / 75.388 ms` (`-1.022%` by total) | rolled back |
+| Tiny raw-pointer cache for repeated interned string-pair concatenations in `SQStringTable::Concat()` | `17.911 / 52.846 / 74.299 ms` | source smoke improved to `21.958 / 63.415 / 96.722 ms` with matching checksums, a targeted concat/lifetime script matched the retained binary output, but the authoritative pinned PGO+LTO retry landed at `18.666 / 53.775 / 76.744 ms` (`-2.846%` by total) | rolled back |
+| Hoist comparator resize-guard baseline out of each `_sort_compare()` callback in `array.sort()` | `17.911 / 52.846 / 74.299 ms` | source smoke improved to `21.664 / 60.832 / 92.575 ms` with matching checksums and targeted sort behavior stayed correct, but the authoritative pinned PGO+LTO retry was only `17.875 / 52.586 / 74.498 ms` (`+0.067%` by total) and the confirmation run fell to `18.249 / 52.843 / 75.623 ms` (`-1.144%` by total) | rolled back; not stable enough to retain |
+| Single-character fast path in `string_find()` before `scstrstr()` | `17.911 / 52.846 / 74.299 ms` | source smoke was `24.303 / 68.730 / 104.961 ms` with matching checksums, targeted `string.find()` behavior stayed correct for single-char, empty-substring, out-of-range, and invalid-param cases, but the authoritative pinned PGO+LTO retry landed at `17.742 / 53.657 / 75.175 ms` (`-1.047%` by total) | rolled back |
 
 ### Re-evaluated against retained head `18.331 / 52.681 / 75.520 ms`
 
