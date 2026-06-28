@@ -648,7 +648,10 @@ SQString* SQStringTable::Concat(const SQChar* a, SQInteger alen, const SQChar* b
             }
         }
     }
-    //
+    if ((_slotused + 1) > (_numofslots - (_numofslots / 4))) {
+        Resize(_numofslots * 2);
+        h = newhash & (_numofslots - 1);
+    }
     SQString* t = (SQString*)SQ_MALLOC(sq_rsl(len) + sizeof(SQString));
     new (t) SQString;
     t->_sharedstate = _sharedstate;
@@ -664,8 +667,6 @@ SQString* SQStringTable::Concat(const SQChar* a, SQInteger alen, const SQChar* b
     SQHash old_newhash = ::_hashstr(t->_val, t->_len);
     assert(old_newhash == newhash);
 #endif
-    if (_slotused > _numofslots)  /* too crowded? */
-        Resize(_numofslots * 2);
     return t;
 }
 
@@ -681,6 +682,10 @@ SQString *SQStringTable::Add(const SQChar *news,SQInteger len)
             return s; //found
     }
 
+    if ((_slotused + 1) > (_numofslots - (_numofslots / 4))) {
+        Resize(_numofslots*2);
+        h = newhash&(_numofslots-1);
+    }
     SQString *t = (SQString *)SQ_MALLOC(sq_rsl(len)+sizeof(SQString));
     new (t) SQString;
     t->_sharedstate = _sharedstate;
@@ -691,8 +696,6 @@ SQString *SQStringTable::Add(const SQChar *news,SQInteger len)
     t->_next = _strings[h];
     _strings[h] = t;
     _slotused++;
-    if (_slotused > _numofslots)  /* too crowded? */
-        Resize(_numofslots*2);
     return t;
 }
 

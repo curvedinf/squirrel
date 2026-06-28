@@ -26,15 +26,28 @@ taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benc
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
-| `registry_catalog` | `18.331` | `727105` |
-| `world_map_graph` | `52.681` | `325170` |
-| `inventory_flow` | `75.520` | `812233` |
+| `registry_catalog` | `17.911` | `727105` |
+| `world_map_graph` | `52.846` | `325170` |
+| `inventory_flow` | `74.299` | `812233` |
 
-This baseline came from retaining direct-result intrinsic conversions and primitive `tostring()` fast paths in `SQVM::TryFastCallNative()` over the prior retained head of `18.690 / 52.478 / 76.664 ms`. The clean retry was `18.729 / 52.893 / 75.289 ms` (`+0.623%` overall), and the confirmation run promoted here was `18.331 / 52.681 / 75.520 ms` (`+0.879%` overall).
+This baseline came from growing the global `SQStringTable` before `Concat()` / `Add()` insertions once the table reaches a 75% load factor, over the prior retained head of `18.331 / 52.681 / 75.520 ms`. The clean retry was `18.089 / 53.498 / 74.630 ms` (`+0.215%` overall), and the confirmation run promoted here was `17.911 / 52.846 / 74.299 ms` (`+1.007%` overall).
 
 ## Historical Reference Baselines
 
 ### Immediate Prior Retained-Head Baseline
+
+Date: `2026-06-27`
+Build: `./build-pgo-lto/bin/sqbench`
+
+| Workload | run_avg_ms | checksum |
+| --- | ---: | ---: |
+| `registry_catalog` | `18.331` | `727105` |
+| `world_map_graph` | `52.681` | `325170` |
+| `inventory_flow` | `75.520` | `812233` |
+
+This was the retained head before the global `SQStringTable` load-factor growth change was promoted.
+
+### Earlier Prior Retained-Head Baseline
 
 Date: `2026-06-27`
 Build: `./build-pgo-lto/bin/sqbench`
@@ -206,6 +219,7 @@ Some earlier runs were kept before this ledger existed. Where exact per-workload
 
 | Change | Baseline used | Result | Overall |
 | --- | --- | --- | ---: |
+| Grow the global `SQStringTable` before `Concat()` / `Add()` insertions once it reaches a 75% load factor | retained PGO+LTO head `18.331 / 52.681 / 75.520 ms` | clean retry: `18.089 / 53.498 / 74.630 ms` (`+0.215%` by total); confirmation promoted: `17.911 / 52.846 / 74.299 ms` | `+1.007%` |
 | Direct-result string conversions and primitive `tostring()` fast paths in `SQVM::TryFastCallNative()` | retained PGO+LTO head `18.690 / 52.478 / 76.664 ms` | clean retry: `18.729 / 52.893 / 75.289 ms`; confirmation promoted: `18.331 / 52.681 / 75.520 ms` | `+0.879%` |
 | Empty-string fast paths in `SQVM::StringCat()` | retained PGO+LTO head `18.804 / 52.961 / 76.832 ms` | clean retry: `18.624 / 52.597 / 76.493 ms`; confirmation promoted: `18.690 / 52.478 / 76.664 ms` | `+0.515%` |
 | Same-value fast paths in `SQObjectPtr::operator=(bool)` and `SQObjectPtr::Null()` | refreshed retained PGO+LTO head `19.633 / 54.329 / 79.579 ms` | clean retry: `19.100 / 54.267 / 78.035 ms` (`+1.393%`); confirmation promoted: `18.804 / 52.961 / 76.832 ms` | `+3.220%` |
@@ -239,6 +253,16 @@ This older retained PGO snapshot predates the retained `-fno-semantic-interposit
 ## Rolled Back Results
 
 These candidates were benchmark-negative or otherwise not retained.
+
+### Re-evaluated against retained head `18.331 / 52.681 / 75.520 ms`
+
+These retries were run after retaining direct-result intrinsic conversions and primitive `tostring()` fast paths in `SQVM::TryFastCallNative()`.
+
+| Change | Frozen baseline | Retry results | Outcome |
+| --- | --- | --- | --- |
+| Known-null `SQObjectPtr` assignment helper for fresh `SQTable::NewSlot()` destinations | `18.331 / 52.681 / 75.520 ms` | initial retry: `17.765 / 53.610 / 74.488 ms` (`+0.459%` by total); confirmation retry: `17.697 / 54.379 / 75.385 ms` (`-0.630%` by total) | rolled back; confirmation lost on `world_map_graph` and total runtime |
+| Shared `_OP_PREPCALLK` next-call decoding and fast-path branch consolidation in `SQVM::Execute()` | `18.331 / 52.681 / 75.520 ms` | initial retry: `18.218 / 52.129 / 74.942 ms` (`+0.856%` by total); confirmation retry: `17.996 / 53.455 / 75.454 ms` (`-0.254%` by total) | rolled back; confirmation lost on `world_map_graph` and `inventory_flow` |
+| Detached-free bitmap tracking for `SQTable::NewSlot()` free-slot selection | `18.331 / 52.681 / 75.520 ms` | rejected during smoke before a pinned run: `registry_catalog` checksum still matched at `20.772 ms`, `world_map_graph` checksum still matched at `60.624 ms`, but `inventory_flow` did not finish within a `30 s` timeout | rolled back; pathological slowdown on `inventory_flow` |
 
 ### Re-evaluated against retained head `18.804 / 52.961 / 76.832 ms`
 
