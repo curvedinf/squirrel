@@ -29,14 +29,14 @@ taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benc
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
-| `registry_catalog` | `52.299` | `2019808` |
-| `world_map_graph` | `54.224` | `325170` |
-| `inventory_flow` | `49.860` | `580946` |
-| `session_context_flow` | `48.671` | `593415` |
-| `scenario_tick_flow` | `55.026` | `2030324` |
-| `volume_presence_scan` | `53.142` | `308206` |
+| `registry_catalog` | `50.345` | `2019808` |
+| `world_map_graph` | `53.326` | `325170` |
+| `inventory_flow` | `50.398` | `580946` |
+| `session_context_flow` | `48.564` | `593415` |
+| `scenario_tick_flow` | `52.663` | `2030324` |
+| `volume_presence_scan` | `51.472` | `308206` |
 
-This is an intentional benchmark-suite expansion rebaseline on the current retained code head after adding the three delving-mode-derived workloads and balancing all six defaults into the same runtime band. The authoritative six-workload retained baseline is `313.222 ms` total. Earlier three-workload sections below are preserved for history, but their totals are not directly comparable to this expanded-suite baseline.
+This is an intentional benchmark-suite expansion rebaseline on the current retained code head after adding the three delving-mode-derived workloads, balancing all six defaults into the same runtime band, and retraining the retained PGO+LTO build on the expanded suite itself. The authoritative six-workload retained baseline is `306.768 ms` total. Earlier three-workload sections below are preserved for history, but their totals are not directly comparable to this expanded-suite baseline.
 
 ## Historical Reference Baselines
 
@@ -287,6 +287,14 @@ This older retained PGO snapshot predates the retained `-fno-semantic-interposit
 ## Rolled Back Results
 
 These candidates were benchmark-negative or otherwise not retained.
+
+### Re-evaluated against retained six-workload head `50.345 / 53.326 / 50.398 / 48.564 / 52.663 / 51.472 ms`
+
+These retries were run after the retained head and PGO training mix were both refreshed to the six-workload suite.
+
+| Change | Frozen baseline | Retry results | Outcome |
+| --- | --- | --- | --- |
+| Intrinsic fast path for `string.tolower()` / `string.toupper()` default-delegate calls | `50.345 / 53.326 / 50.398 / 48.564 / 52.663 / 51.472 ms` | direct and compiled-bytecode string-case probes matched on full-range, sliced, and error-path behavior; the first pinned PGO+LTO retry landed at `50.346 / 52.971 / 48.912 / 49.016 / 52.792 / 51.800 ms` (`+0.304%` by total), but the confirmation slipped to `51.247 / 55.109 / 51.160 / 50.458 / 53.601 / 52.719 ms` (`-2.452%` by total) and the tie-break still landed at `51.708 / 53.929 / 50.727 / 50.462 / 52.133 / 52.850 ms` (`-1.643%` by total) | rolled back; not stable enough to retain |
 
 ### Re-evaluated against retained head `18.466 / 51.954 / 73.821 ms`
 
