@@ -19,22 +19,28 @@ CPU pinning: `taskset -c 0`
 Command set:
 
 ```bash
-taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/registry_catalog.nut 180
+taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/registry_catalog.nut 500
 taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/world_map_graph.nut 30 18 12
-taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/inventory_flow.nut 3200 11
+taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/inventory_flow.nut 2200 11
+taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/session_context_flow.nut 450 12
+taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/scenario_tick_flow.nut 10200 24 14
+taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/volume_presence_scan.nut 650 6 12 6
 ```
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
-| `registry_catalog` | `18.466` | `727105` |
-| `world_map_graph` | `51.954` | `325170` |
-| `inventory_flow` | `73.821` | `812233` |
+| `registry_catalog` | `52.299` | `2019808` |
+| `world_map_graph` | `54.224` | `325170` |
+| `inventory_flow` | `49.860` | `580946` |
+| `session_context_flow` | `48.671` | `593415` |
+| `scenario_tick_flow` | `55.026` | `2030324` |
+| `volume_presence_scan` | `53.142` | `308206` |
 
-This baseline came from folding three-part string-concat chains into `_OP_CAT3` when the first binary `+` is provably string-producing, over the prior retained head of `17.984 / 52.483 / 74.219 ms`. The clean retry was `18.307 / 51.626 / 73.828 ms` (`+0.639%` overall), and the confirmation run promoted here was `18.466 / 51.954 / 73.821 ms` (`+0.308%` overall).
+This is an intentional benchmark-suite expansion rebaseline on the current retained code head after adding the three delving-mode-derived workloads and balancing all six defaults into the same runtime band. The authoritative six-workload retained baseline is `313.222 ms` total. Earlier three-workload sections below are preserved for history, but their totals are not directly comparable to this expanded-suite baseline.
 
 ## Historical Reference Baselines
 
-### Immediate Prior Retained-Head Baseline
+### Immediate Prior Three-Workload Retained-Head Baseline
 
 Date: `2026-06-27`
 Build: `./build-pgo-lto/bin/sqbench`
@@ -45,7 +51,7 @@ Build: `./build-pgo-lto/bin/sqbench`
 | `world_map_graph` | `52.483` | `325170` |
 | `inventory_flow` | `74.219` | `812233` |
 
-This was the retained head before the `_OP_CAT3` three-part string-concat chain change was promoted.
+This was the last retained three-workload baseline before the suite was expanded to six workloads. It remains useful for history, but not for direct total-runtime comparisons against the expanded-suite baseline above.
 
 ### Earlier Prior Retained-Head Baseline
 

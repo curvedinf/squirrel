@@ -29,11 +29,17 @@ mkdir -p "$profile_dir"
 cmake --build "$build_dir" -j"$jobs" --target sqbench
 
 "${runner[@]}" --compile-repeat "$train_compile_repeat" --run-repeat "$train_run_repeat" \
-  "$repo_root/benchmarks/workloads/registry_catalog.nut" 180
+  "$repo_root/benchmarks/workloads/registry_catalog.nut" 500
 "${runner[@]}" --compile-repeat "$train_compile_repeat" --run-repeat "$train_run_repeat" \
   "$repo_root/benchmarks/workloads/world_map_graph.nut" 30 18 12
 "${runner[@]}" --compile-repeat "$train_compile_repeat" --run-repeat "$train_run_repeat" \
-  "$repo_root/benchmarks/workloads/inventory_flow.nut" 3200 11
+  "$repo_root/benchmarks/workloads/inventory_flow.nut" 2200 11
+"${runner[@]}" --compile-repeat "$train_compile_repeat" --run-repeat "$train_run_repeat" \
+  "$repo_root/benchmarks/workloads/session_context_flow.nut" 450 12
+"${runner[@]}" --compile-repeat "$train_compile_repeat" --run-repeat "$train_run_repeat" \
+  "$repo_root/benchmarks/workloads/scenario_tick_flow.nut" 10200 24 14
+"${runner[@]}" --compile-repeat "$train_compile_repeat" --run-repeat "$train_run_repeat" \
+  "$repo_root/benchmarks/workloads/volume_presence_scan.nut" 650 6 12 6
 
 cmake -S "$repo_root" -B "$build_dir" \
   -DSQ_BUILD_BENCHMARKS=ON \
