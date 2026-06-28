@@ -26,15 +26,28 @@ taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benc
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
-| `registry_catalog` | `17.984` | `727105` |
-| `world_map_graph` | `52.483` | `325170` |
-| `inventory_flow` | `74.219` | `812233` |
+| `registry_catalog` | `18.466` | `727105` |
+| `world_map_graph` | `51.954` | `325170` |
+| `inventory_flow` | `73.821` | `812233` |
 
-This baseline came from leaving one spare initial slot for non-empty table literals when emitting `_OP_NEWOBJ` table capacities, over the prior retained head of `17.911 / 52.846 / 74.299 ms`. The clean retry was `18.134 / 52.244 / 74.191 ms` (`+0.336%` overall), and the confirmation run promoted here was `17.984 / 52.483 / 74.219 ms` (`+0.255%` overall).
+This baseline came from folding three-part string-concat chains into `_OP_CAT3` when the first binary `+` is provably string-producing, over the prior retained head of `17.984 / 52.483 / 74.219 ms`. The clean retry was `18.307 / 51.626 / 73.828 ms` (`+0.639%` overall), and the confirmation run promoted here was `18.466 / 51.954 / 73.821 ms` (`+0.308%` overall).
 
 ## Historical Reference Baselines
 
 ### Immediate Prior Retained-Head Baseline
+
+Date: `2026-06-27`
+Build: `./build-pgo-lto/bin/sqbench`
+
+| Workload | run_avg_ms | checksum |
+| --- | ---: | ---: |
+| `registry_catalog` | `17.984` | `727105` |
+| `world_map_graph` | `52.483` | `325170` |
+| `inventory_flow` | `74.219` | `812233` |
+
+This was the retained head before the `_OP_CAT3` three-part string-concat chain change was promoted.
+
+### Earlier Prior Retained-Head Baseline
 
 Date: `2026-06-27`
 Build: `./build-pgo-lto/bin/sqbench`
@@ -232,6 +245,7 @@ Some earlier runs were kept before this ledger existed. Where exact per-workload
 
 | Change | Baseline used | Result | Overall |
 | --- | --- | --- | ---: |
+| `_OP_CAT3` peephole for three-part string-concat chains when the first binary `+` is provably string-producing | retained PGO+LTO head `17.984 / 52.483 / 74.219 ms` | clean retry: `18.307 / 51.626 / 73.828 ms` (`+0.639%` by total); confirmation promoted: `18.466 / 51.954 / 73.821 ms` | `+0.308%` |
 | Leave one spare initial slot for non-empty table literals when emitting `_OP_NEWOBJ` capacities | retained PGO+LTO head `17.911 / 52.846 / 74.299 ms` | clean retry: `18.134 / 52.244 / 74.191 ms` (`+0.336%` by total); confirmation promoted: `17.984 / 52.483 / 74.219 ms` | `+0.255%` |
 | Grow the global `SQStringTable` before `Concat()` / `Add()` insertions once it reaches a 75% load factor | retained PGO+LTO head `18.331 / 52.681 / 75.520 ms` | clean retry: `18.089 / 53.498 / 74.630 ms` (`+0.215%` by total); confirmation promoted: `17.911 / 52.846 / 74.299 ms` | `+1.007%` |
 | Direct-result string conversions and primitive `tostring()` fast paths in `SQVM::TryFastCallNative()` | retained PGO+LTO head `18.690 / 52.478 / 76.664 ms` | clean retry: `18.729 / 52.893 / 75.289 ms`; confirmation promoted: `18.331 / 52.681 / 75.520 ms` | `+0.879%` |
@@ -267,6 +281,15 @@ This older retained PGO snapshot predates the retained `-fno-semantic-interposit
 ## Rolled Back Results
 
 These candidates were benchmark-negative or otherwise not retained.
+
+### Re-evaluated against retained head `17.984 / 52.483 / 74.219 ms`
+
+These retries were run after retaining the non-empty table-literal spare-slot sizing change.
+
+| Change | Frozen baseline | Retry results | Outcome |
+| --- | --- | --- | --- |
+| Direct type-dispatch for `array.sort()` comparator return values instead of generic numeric/bool conversion helpers | `17.984 / 52.483 / 74.219 ms` | source smoke was `23.548 / 66.803 / 98.302 ms` with matching checksums, targeted sort behavior stayed correct for integer, float, bool, and resize-during-compare cases, but the authoritative pinned PGO+LTO retry landed at `18.010 / 52.805 / 74.096 ms` (`-0.156%` by total) | rolled back |
+| Literal-folded `_OP_ADDK` peephole to skip loading right-hand constants before `_OP_ADD` | `17.984 / 52.483 / 74.219 ms` | source smoke was `22.061 / 64.148 / 92.537 ms` with matching checksums, direct and bytecode execution matched for string and numeric literal-add probes, but the authoritative pinned PGO+LTO retry landed at `18.097 / 52.425 / 75.927 ms` (`-1.218%` by total) | rolled back |
 
 ### Re-evaluated against retained head `17.911 / 52.846 / 74.299 ms`
 

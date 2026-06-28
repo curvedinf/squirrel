@@ -453,6 +453,53 @@ bool SQVM::StringCat(const SQObjectPtr &str,const SQObjectPtr &obj,SQObjectPtr &
     return true;
 }
 
+bool SQVM::StringCat3(const SQObjectPtr &aobj,const SQObjectPtr &bobj,const SQObjectPtr &cobj,SQObjectPtr &dest)
+{
+    const SQObjectPtr *parts[3] = { &aobj, &bobj, &cobj };
+    SQObjectPtr temps[3];
+    SQInteger lengths[3] = { 0, 0, 0 };
+    SQInteger total = 0;
+    SQInteger non_empty = 0;
+    SQInteger last_non_empty = -1;
+
+    for(SQInteger i = 0; i < 3; ++i) {
+        if(sq_type(*parts[i]) != OT_STRING) {
+            if(!ToString(*parts[i], temps[i])) {
+                return false;
+            }
+            parts[i] = &temps[i];
+        }
+        lengths[i] = _string(*parts[i])->_len;
+        if(lengths[i] != 0) {
+            total += lengths[i];
+            non_empty++;
+            last_non_empty = i;
+        }
+    }
+
+    if(non_empty == 0) {
+        dest = SQString::Create(_ss(this), _SC(""), 0);
+        return true;
+    }
+    if(non_empty == 1) {
+        dest = *parts[last_non_empty];
+        return true;
+    }
+
+    SQChar *buffer = _sp(sq_rsl(total + 1));
+    SQInteger offset = 0;
+    for(SQInteger i = 0; i < 3; ++i) {
+        if(lengths[i] == 0) {
+            continue;
+        }
+        memcpy(buffer + offset, _stringval(*parts[i]), sq_rsl(lengths[i]));
+        offset += lengths[i];
+    }
+    buffer[total] = _SC('\0');
+    dest = SQString::Create(_ss(this), _spval, total);
+    return true;
+}
+
 bool SQVM::TypeOf(const SQObjectPtr &obj1,SQObjectPtr &dest)
 {
     if(is_delegable(obj1) && _delegable(obj1)->_delegate) {
@@ -1198,6 +1245,7 @@ exception_restore:
                 TARGET = (!res)?true:false;
                 } continue;
             case _OP_ADD: _ARITH_(+,TARGET,STK(arg2),STK(arg1)); continue;
+            case _OP_CAT3: _GUARD(StringCat3(STK(arg1), STK(arg2), STK(arg3), TARGET)); continue;
             case _OP_SUB: _ARITH_(-,TARGET,STK(arg2),STK(arg1)); continue;
             case _OP_MUL: _ARITH_(*,TARGET,STK(arg2),STK(arg1)); continue;
             case _OP_DIV: _ARITH_NOZERO(/,TARGET,STK(arg2),STK(arg1),_SC("division by zero")); continue;

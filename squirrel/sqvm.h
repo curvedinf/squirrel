@@ -80,6 +80,7 @@ public:
     bool Clone(const SQObjectPtr &self, SQObjectPtr &target);
     bool ObjCmp(const SQObjectPtr &o1, const SQObjectPtr &o2,SQInteger &res);
     bool StringCat(const SQObjectPtr &str, const SQObjectPtr &obj, SQObjectPtr &dest);
+    bool StringCat3(const SQObjectPtr &a, const SQObjectPtr &b, const SQObjectPtr &c, SQObjectPtr &dest);
     static bool IsEqual(const SQObjectPtr &o1,const SQObjectPtr &o2,bool &res);
     bool ToString(const SQObjectPtr &o,SQObjectPtr &res);
     SQString *PrintObjVal(const SQObjectPtr &o);

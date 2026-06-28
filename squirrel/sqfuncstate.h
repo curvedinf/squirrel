@@ -45,7 +45,7 @@ struct SQFuncState
     SQInteger TopTarget();
     SQInteger GetUpTarget(SQInteger n);
     void DiscardTarget();
-    bool IsLocal(SQUnsignedInteger stkpos);
+    bool IsLocal(SQUnsignedInteger stkpos) const;
     SQObject CreateString(const SQChar *s,SQInteger len = -1);
     SQObject CreateTable();
     bool IsConstant(const SQObject &name,SQObject &e);
@@ -81,6 +81,9 @@ struct SQFuncState
     sqvector<SQFuncState*> _childstates;
     SQInteger GetConstant(const SQObject &cons);
 private:
+    SQInteger FindLastWrite(SQUnsignedInteger stkpos, SQInteger before) const;
+    bool IsLiteralString(SQInteger literal_index) const;
+    bool IsDefinitelyStringTemp(SQUnsignedInteger stkpos, SQInteger before) const;
     CompilerErrorFunc _errfunc;
     void *_errtarget;
     SQSharedState *_ss;

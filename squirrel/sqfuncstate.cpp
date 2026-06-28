@@ -73,6 +73,7 @@ SQInstructionDesc g_InstrDesc[]={
     {_SC("_OP_NEWSLOTA")},
     {_SC("_OP_GETBASE")},
     {_SC("_OP_CLOSE")},
+    {_SC("_OP_CAT3")},
 };
 #endif
 void DumpLiteral(SQObjectPtr &o)
@@ -105,6 +106,56 @@ SQFuncState::SQFuncState(SQSharedState *ss,SQFuncState *parent,CompilerErrorFunc
         _outers = 0;
         _ss = ss;
 
+}
+
+SQInteger SQFuncState::FindLastWrite(SQUnsignedInteger stkpos, SQInteger before) const
+{
+    for(SQInteger i = before; i >= 0; --i) {
+        if(_instructions[i]._arg0 == stkpos) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+bool SQFuncState::IsLiteralString(SQInteger literal_index) const
+{
+    SQObjectPtr refidx, key, val;
+    SQInteger idx;
+    while((idx = _table(_literals)->Next(false, refidx, key, val)) != -1) {
+        refidx = idx;
+        if(_integer(val) == literal_index) {
+            return sq_type(key) == OT_STRING;
+        }
+    }
+    return false;
+}
+
+bool SQFuncState::IsDefinitelyStringTemp(SQUnsignedInteger stkpos, SQInteger before) const
+{
+    if(IsLocal(stkpos)) {
+        return false;
+    }
+
+    SQInteger writer = FindLastWrite(stkpos, before);
+    if(writer < 0) {
+        return false;
+    }
+
+    const SQInstruction &inst = _instructions[writer];
+    switch(inst.op) {
+    case _OP_LOAD:
+        return IsLiteralString(inst._arg1);
+    case _OP_MOVE:
+        return IsDefinitelyStringTemp(inst._arg1, writer - 1);
+    case _OP_CAT3:
+        return true;
+    case _OP_ADD:
+        return IsDefinitelyStringTemp(inst._arg1, writer - 1)
+            || IsDefinitelyStringTemp(inst._arg2, writer - 1);
+    default:
+        return false;
+    }
 }
 
 void SQFuncState::Error(const SQChar *err)
@@ -343,7 +394,7 @@ bool SQFuncState::IsConstant(const SQObject &name,SQObject &e)
     return false;
 }
 
-bool SQFuncState::IsLocal(SQUnsignedInteger stkpos)
+bool SQFuncState::IsLocal(SQUnsignedInteger stkpos) const
 {
     if(stkpos>=_vlocals.size())return false;
     else if(sq_type(_vlocals[stkpos]._name)!=OT_NULL)return true;
@@ -517,7 +568,7 @@ void SQFuncState::AddInstruction(SQInstruction &i)
             break;
         case _OP_MOVE:
             switch(pi.op) {
-            case _OP_GET: case _OP_ADD: case _OP_SUB: case _OP_MUL: case _OP_DIV: case _OP_MOD: case _OP_BITW:
+            case _OP_GET: case _OP_ADD: case _OP_CAT3: case _OP_SUB: case _OP_MUL: case _OP_DIV: case _OP_MOD: case _OP_BITW:
             case _OP_LOADINT: case _OP_LOADFLOAT: case _OP_LOADBOOL: case _OP_LOAD:
 
                 if(pi._arg0 == i._arg1)
@@ -552,6 +603,19 @@ void SQFuncState::AddInstruction(SQInstruction &i)
                 pi._arg0 = i._arg0;
                 pi._arg2 = i._arg2;
                 pi._arg3 = MAX_FUNC_STACKSIZE;
+                return;
+            }
+            break;
+        case _OP_ADD:
+            if(pi.op == _OP_ADD && pi._arg0 == i._arg2 && (!IsLocal(pi._arg0))
+                && IsDefinitelyStringTemp(pi._arg0, _instructions.size() - 1)) {
+                const SQInteger src0 = pi._arg2;
+                const SQInteger src1 = pi._arg1;
+                pi.op = _OP_CAT3;
+                pi._arg0 = i._arg0;
+                pi._arg1 = src0;
+                pi._arg2 = (unsigned char)src1;
+                pi._arg3 = (unsigned char)i._arg1;
                 return;
             }
             break;
