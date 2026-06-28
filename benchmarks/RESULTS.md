@@ -13,19 +13,37 @@ Policy:
 
 Use this for the next candidate unless a newer retained result is promoted.
 
-Date: `2026-06-27`
+Date: `2026-06-28`
 Build: `./build-pgo-lto/bin/sqbench`
-CPU pinning: `taskset -c 0`
+CPU pinning: `taskset -c 2`
 Command set:
 
 ```bash
-taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/registry_catalog.nut 500
-taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/world_map_graph.nut 30 18 12
-taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/inventory_flow.nut 2200 11
-taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/session_context_flow.nut 450 12
-taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/scenario_tick_flow.nut 10200 24 14
-taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/volume_presence_scan.nut 650 6 12 6
+taskset -c 2 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/registry_catalog.nut 500
+taskset -c 2 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/world_map_graph.nut 30 18 12
+taskset -c 2 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/inventory_flow.nut 2200 11
+taskset -c 2 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/session_context_flow.nut 450 12
+taskset -c 2 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/scenario_tick_flow.nut 10200 24 14
+taskset -c 2 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benchmarks/workloads/volume_presence_scan.nut 650 6 12 6
 ```
+
+| Workload | run_avg_ms | checksum |
+| --- | ---: | ---: |
+| `registry_catalog` | `47.387` | `2019808` |
+| `world_map_graph` | `50.392` | `325170` |
+| `inventory_flow` | `47.367` | `580946` |
+| `session_context_flow` | `47.711` | `593415` |
+| `scenario_tick_flow` | `52.132` | `2030324` |
+| `volume_presence_scan` | `51.213` | `308206` |
+
+This retained head adds a bounded thread-local small-block cache under `sq_vm_malloc()` / `sq_vm_realloc()` / `sq_vm_free()`. After six-workload checksum smoke, two stock `samples/` interpreter runs, fresh PGO retraining, and two clean sequential quiet-core control pairs against the prior retained worktree, the authoritative six-workload retained baseline is `296.202 ms` total. Earlier baseline sections below are preserved for history.
+
+## Historical Reference Baselines
+
+### Immediate Prior Six-Workload Retained-Head Baseline
+
+Date: `2026-06-27`
+Build: `./build-pgo-lto/bin/sqbench`
 
 | Workload | run_avg_ms | checksum |
 | --- | ---: | ---: |
@@ -36,9 +54,7 @@ taskset -c 0 ./build-pgo-lto/bin/sqbench --compile-repeat 3 --run-repeat 40 benc
 | `scenario_tick_flow` | `52.663` | `2030324` |
 | `volume_presence_scan` | `51.472` | `308206` |
 
-This is an intentional benchmark-suite expansion rebaseline on the current retained code head after adding the three delving-mode-derived workloads, balancing all six defaults into the same runtime band, and retraining the retained PGO+LTO build on the expanded suite itself. The authoritative six-workload retained baseline is `306.768 ms` total. Earlier three-workload sections below are preserved for history, but their totals are not directly comparable to this expanded-suite baseline.
-
-## Historical Reference Baselines
+This was the retained head before the thread-local small-block allocator cache was promoted. Its authoritative six-workload total was `306.768 ms`.
 
 ### Immediate Prior Three-Workload Retained-Head Baseline
 
@@ -295,6 +311,8 @@ These retries were run after the retained head and PGO training mix were both re
 | Change | Frozen baseline | Retry results | Outcome |
 | --- | --- | --- | --- |
 | Intrinsic fast path for `string.tolower()` / `string.toupper()` default-delegate calls | `50.345 / 53.326 / 50.398 / 48.564 / 52.663 / 51.472 ms` | direct and compiled-bytecode string-case probes matched on full-range, sliced, and error-path behavior; the first pinned PGO+LTO retry landed at `50.346 / 52.971 / 48.912 / 49.016 / 52.792 / 51.800 ms` (`+0.304%` by total), but the confirmation slipped to `51.247 / 55.109 / 51.160 / 50.458 / 53.601 / 52.719 ms` (`-2.452%` by total) and the tie-break still landed at `51.708 / 53.929 / 50.727 / 50.462 / 52.133 / 52.850 ms` (`-1.643%` by total) | rolled back; not stable enough to retain |
+| Return the original string from `string.tolower()` / `string.toupper()` when the selected slice is already unchanged | `50.345 / 53.326 / 50.398 / 48.564 / 52.663 / 51.472 ms` | source-smoke checksums stayed clean and direct plus compiled-bytecode string-case probes still matched on full-range, sliced, and error-path behavior, but the authoritative pinned PGO+LTO retry landed at `51.023 / 61.337 / 49.987 / 45.696 / 53.009 / 51.556 ms` (`-1.904%` by total) with a large `world_map_graph` regression | rolled back |
+| ASCII-fast plus intrinsic `string.tolower()` / `string.toupper()` with lazy allocation and no-op result reuse | `50.345 / 53.326 / 50.398 / 48.564 / 52.663 / 51.472 ms` | six-workload source smoke stayed checksum-clean, and direct plus compiled-bytecode string-case probes still matched on full-range, sliced, no-op, and error-path behavior. An initial pinned run was invalidated by seven orphaned `inferno -benchmark` processes saturating the host. After clearing that interference, a fair quiet-core control run on the retained worktree measured `49.193 / 52.320 / 47.907 / 49.050 / 51.324 / 52.305 ms`, while the candidate measured `49.314 / 52.441 / 50.331 / 49.573 / 50.306 / 51.640 ms` (`-0.498%` by total) | rolled back |
 
 ### Re-evaluated against retained head `18.466 / 51.954 / 73.821 ms`
 
