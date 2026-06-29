@@ -593,8 +593,11 @@ bool SQVM::StartCall(SQClosure *closure,SQInteger target,SQInteger args,SQIntege
         SQArray *arr = SQArray::Create(_ss(this),nvargs);
         SQInteger pbase = stackbase+paramssize;
         for(SQInteger n = 0; n < nvargs; n++) {
-            arr->_values[n] = _stack._vals[pbase];
-            _stack._vals[pbase].Null();
+            // Steal each vararg's refcount into the array slot instead of
+            // copying then nulling the stack slot: arr->_values[n] is a
+            // freshly resize-constructed (null) slot, so the swap leaves the
+            // stack slot null and the array slot owning the value.
+            _Swap(arr->_values[n], _stack._vals[pbase]);
             pbase++;
 
         }
