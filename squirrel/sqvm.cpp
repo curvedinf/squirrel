@@ -1078,11 +1078,11 @@ exception_restore:
                 SQObjectPtr &t = STK(arg1);
                 if (sq_type(t) == OT_CLOSURE
                     && (!_closure(t)->_function->_bgenerator)){
-                    SQObjectPtr clo = t;
+                    SQClosure *clos = _closure(t);
                     SQInteger last_top = _top;
                     if(_openouters) CloseOuters(&(_stack._vals[_stackbase]));
                     for (SQInteger i = 0; i < arg3; i++) STK(i) = STK(arg2 + i);
-                    _GUARD(StartCall(_closure(clo), ci->_target, arg3, _stackbase, true));
+                    _GUARD(StartCall(clos, ci->_target, arg3, _stackbase, true));
                     if (last_top >= _top) {
                         _top = last_top;
                     }
