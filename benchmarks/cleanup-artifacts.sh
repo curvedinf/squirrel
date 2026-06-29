@@ -7,8 +7,8 @@ cd "$repo_root"
 keep=(
   build
   build-retained-source
+  build-pgo-lto-tc13
   build-pgo-lto-call9
-  build-pgo-lto-pc9
   build-pgo-lto-fastdefaultget
 )
 
